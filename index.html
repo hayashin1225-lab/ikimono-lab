@@ -4,81 +4,67 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050b12">
-<title>いきもの研究所 v0.2</title>
+<title>いきもの研究所 v0.3</title>
 <style>
-:root {
-  --bg:#050b12; --panel:#0d1722; --panel2:#101e2b; --line:#284359;
-  --text:#f6fbff; --muted:#a9bdca; --blue:#38bdf8; --gold:#f6c453;
-  --green:#5ee0a0; --purple:#c084fc; --red:#fb7185;
+:root{
+  --bg:#050b12;--panel:#0d1722;--panel2:#101e2b;--line:#284359;
+  --text:#f6fbff;--muted:#aac0ce;--blue:#38bdf8;--gold:#f6c453;
+  --green:#5ee0a0;--purple:#c084fc;--red:#fb7185
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{background:var(--bg)}
-body{margin:0;background:
-radial-gradient(circle at 30% 0%,#12314a 0,transparent 34%),
-linear-gradient(180deg,#06111b,#03070b);color:var(--text);
-font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif}
+html{background:var(--bg);scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(circle at 30% 0%,#12314a 0,transparent 34%),linear-gradient(180deg,#06111b,#03070b);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif}
 button{font:inherit;touch-action:manipulation}
+button:disabled{cursor:not-allowed}
 .app{max-width:720px;margin:auto;min-height:100vh;padding:12px 12px calc(28px + env(safe-area-inset-bottom))}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 3px 15px}
-.brand{display:flex;align-items:center;gap:9px}
-.logo{font-size:28px} .brand h1{font-size:19px;margin:0} .brand small{display:block;color:var(--muted);font-size:10px}
-.points{border:1px solid var(--line);border-radius:13px;padding:8px 11px;background:#08111a;font-weight:900}
-.points span{color:var(--blue)}
-.panel{background:linear-gradient(180deg,rgba(16,30,43,.97),rgba(8,18,27,.98));border:1px solid var(--line);
-border-radius:20px;box-shadow:0 14px 34px rgba(0,0,0,.33);overflow:hidden;margin-bottom:12px}
-.pad{padding:15px}
-h2{font-size:20px;margin:0 0 5px} .sub{color:var(--muted);font-size:12px;margin:0 0 12px}
-.packs{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;overflow-x:auto}
-.packBtn{min-width:72px;border:1px solid #284359;border-radius:14px;padding:10px 5px;color:white;background:#0b1823;font-weight:900;font-size:12px}
-.packBtn span{font-size:27px;display:block;margin-bottom:4px} .packBtn.active{border-color:#38bdf8;box-shadow:0 0 18px rgba(56,189,248,.4);background:#0b2940}
-.stage{min-height:274px;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;position:relative}
-.bag{width:185px;height:218px;border-radius:22px;border:4px solid #2cbcf2;background:
-linear-gradient(145deg,#092842,#07101a 60%);display:flex;flex-direction:column;justify-content:center;align-items:center;
-box-shadow:0 0 30px rgba(56,189,248,.25),inset 0 0 24px rgba(56,189,248,.17);transform:rotate(-2deg)}
-.bag .bagLogo{font-size:62px} .bag strong{font-size:22px} .bag small{color:#8edcff;font-weight:800;margin-top:6px}
+.brand{display:flex;align-items:center;gap:9px}.logo{font-size:28px}.brand h1{font-size:19px;margin:0}.brand small{display:block;color:var(--muted);font-size:10px}
+.points{border:1px solid var(--line);border-radius:13px;padding:8px 11px;background:#08111a;font-weight:900}.points span{color:var(--blue)}
+.panel{background:linear-gradient(180deg,rgba(16,30,43,.97),rgba(8,18,27,.98));border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 34px rgba(0,0,0,.33);overflow:hidden;margin-bottom:12px}
+.pad{padding:15px}h2{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:12px;margin:0 0 12px;line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.stat{background:#0b1721;border:1px solid #284359;border-radius:14px;padding:10px;text-align:center}.stat b{font-size:19px;color:#7dd3fc;display:block}.stat span{font-size:10px;color:var(--muted)}
+.packs{display:grid;grid-template-columns:repeat(5,minmax(82px,1fr));gap:7px;overflow-x:auto;padding:1px 1px 5px}
+.packBtn{position:relative;min-width:82px;border:1px solid #284359;border-radius:14px;padding:9px 5px 8px;color:white;background:#0b1823;font-weight:900;font-size:12px;min-height:90px}
+.packBtn .packIcon{font-size:25px;display:block;margin-bottom:2px}.packBtn small{display:block;color:#a9bdca;font-size:9px;margin-top:4px;line-height:1.25}
+.packBtn.active{border-color:#38bdf8;box-shadow:0 0 18px rgba(56,189,248,.4);background:#0b2940}
+.packBtn.done{border-color:#2b8d67;background:#0b241c;color:#b8ffe0;opacity:.7}.packBtn.done:after{content:"✓ 完成";position:absolute;inset:auto 5px 5px 5px;border-radius:999px;background:#14532d;color:#d8ffe9;font-size:9px;padding:3px}
+.packBtn.done small{visibility:hidden}.packBtn:disabled{filter:saturate(.65)}
+.stage{min-height:274px;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;position:relative}
+.bag{width:185px;height:218px;border-radius:22px;border:4px solid #2cbcf2;background:linear-gradient(145deg,#092842,#07101a 60%);display:flex;flex-direction:column;justify-content:center;align-items:center;box-shadow:0 0 30px rgba(56,189,248,.25),inset 0 0 24px rgba(56,189,248,.17);transform:rotate(-2deg)}
+.bag .bagLogo{font-size:62px}.bag strong{font-size:22px}.bag small{color:#8edcff;font-weight:800;margin-top:6px}
 .open{border:0;border-radius:999px;margin-top:17px;padding:15px 25px;background:linear-gradient(90deg,#0ea5e9,#22d3ee);color:#03121c;font-size:19px;font-weight:1000;box-shadow:0 10px 28px rgba(14,165,233,.27)}
-.open:active,.action:active{transform:translateY(2px)} .shake{animation:shake .42s ease-in-out 2}
+.open:disabled{background:#53636e;color:#cbd5db;box-shadow:none}.open:active,.action:active{transform:translateY(2px)}.shake{animation:shake .35s ease-in-out 2}
 @keyframes shake{25%{transform:translateX(7px) rotate(3deg)}75%{transform:translateX(-7px) rotate(-4deg)}}
-.result{display:none;width:100%;animation:pop .32s ease} @keyframes pop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
-.heroImg{height:285px;background-size:cover;background-position:center;border-radius:17px;position:relative;overflow:hidden;border:1px solid #35556b}
-.heroImg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(3,8,13,.13) 45%,rgba(3,8,13,.92))}
-.heroHead{position:absolute;z-index:2;left:14px;right:14px;top:12px;display:flex;justify-content:space-between;align-items:flex-start;text-align:left}
-.typeTag,.rarity{padding:6px 10px;border-radius:999px;font-size:12px;font-weight:1000;box-shadow:0 4px 12px rgba(0,0,0,.25)}
-.typeTag{background:#075985} .rarity{background:#7e22ce}
-.nameBlock{position:absolute;z-index:2;left:14px;right:14px;bottom:12px;text-align:left}
-.nameBlock h2{font-size:29px;text-shadow:0 3px 8px #000;margin:0} .latin{font-size:11px;color:#d4e4ed}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.fact{background:#0a1721;border:1px solid #29465b;border-radius:13px;padding:10px;text-align:left;min-height:81px}
-.fact b{display:block;color:#7dd3fc;font-size:11px;margin-bottom:3px} .fact span{font-size:13px;font-weight:800;line-height:1.4}
-.data{border:1px solid #3f5870;border-radius:14px;margin-top:10px;overflow:hidden}
-.row{display:grid;grid-template-columns:78px 1fr;border-bottom:1px solid #243949;text-align:left;font-size:12px}
-.row:last-child{border:0} .row b,.row span{padding:8px} .row b{background:#09131c;color:#a7d8f2} .row span{font-weight:800}
-.evidence{margin-top:9px;background:#17151a;border:1px solid #6f4b7e;border-radius:13px;padding:10px;text-align:left;font-size:12px}
-.evidence b{color:#d8b4fe}
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
-.action{border:0;border-radius:13px;padding:13px 8px;font-weight:1000} .again{background:#0ea5e9;color:#03121c} .notebookBtn{background:#253444;color:white}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.stat{background:#0b1721;border:1px solid #284359;border-radius:14px;padding:10px;text-align:center}
-.stat b{font-size:19px;color:#7dd3fc;display:block} .stat span{font-size:10px;color:var(--muted)}
-.sectionHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.filterNote{color:var(--muted);font-size:11px} .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
-.card{border:1px solid #29465b;background:#0b1721;border-radius:14px;overflow:hidden;position:relative}
-.cardImg{height:96px;background-size:cover;background-position:center;position:relative}
-.cardImg:after{content:"";position:absolute;inset:0;background:linear-gradient(transparent,rgba(3,8,13,.88))}
-.cardBody{padding:9px} .card h3{font-size:13px;margin:0 0 3px} .card p{font-size:10px;color:var(--muted);margin:0}
-.badge{position:absolute;top:7px;right:7px;background:#0b1721dd;border:1px solid #436176;border-radius:999px;padding:4px 7px;font-size:10px;font-weight:900}
-.locked{filter:grayscale(1);opacity:.48} .footer{font-size:11px;color:#8da4b2;text-align:center;line-height:1.6;padding:4px 8px}
-.complete{color:#5ee0a0!important}
-.flash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:50;background:radial-gradient(circle,#fff,#f0abfc88,transparent 65%)}
-.flash.on{animation:flash .65s ease} @keyframes flash{25%{opacity:1}100%{opacity:0}}
-@media(min-width:620px){.grid{grid-template-columns:repeat(4,1fr)}}
+.result{display:none;width:100%;animation:pop .24s ease}@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.resultHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:9px;text-align:left}
+.resultHeader h2{font-size:27px;line-height:1.2;margin:2px 0}.latin{font-size:11px;color:#d4e4ed}.tagRow{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.typeTag,.rarity{padding:6px 9px;border-radius:999px;font-size:11px;font-weight:1000;box-shadow:0 4px 12px rgba(0,0,0,.25);white-space:nowrap}.typeTag{background:#075985}.rarity{background:#7e22ce}
+.artFrame{display:flex;align-items:center;justify-content:center;min-height:220px;padding:8px;background:#02070b;border:1px solid #35556b;border-radius:17px;overflow:hidden}
+.artFrame img{display:block;width:auto;height:auto;max-width:100%;max-height:340px;object-fit:contain}
+.imageNote{margin:7px 0 0;color:#8299a8;font-size:10px;text-align:center}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.fact{background:#0a1721;border:1px solid #29465b;border-radius:13px;padding:11px;text-align:left;min-height:88px}.fact b{display:block;color:#7dd3fc;font-size:12px;margin-bottom:4px}.fact span{font-size:14px;font-weight:800;line-height:1.45}
+.data{border:1px solid #3f5870;border-radius:14px;margin-top:10px;overflow:hidden}.row{display:grid;grid-template-columns:86px 1fr;border-bottom:1px solid #243949;text-align:left;font-size:13px}.row:last-child{border:0}.row b,.row span{padding:9px}.row b{background:#09131c;color:#a7d8f2}.row span{font-weight:800;line-height:1.45}
+.evidence{margin-top:9px;background:#17151a;border:1px solid #6f4b7e;border-radius:13px;padding:11px;text-align:left;font-size:13px;line-height:1.5}.evidence b{color:#d8b4fe}
+.actions{display:block;margin-top:12px}.action{width:100%;border:0;border-radius:14px;padding:15px 8px;font-weight:1000;font-size:17px}.again{background:linear-gradient(90deg,#0ea5e9,#22d3ee);color:#03121c}
+.result.loading{opacity:.72}.result.loading .again{pointer-events:none}
+.sectionHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.filterNote{color:var(--muted);font-size:11px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.card{appearance:none;width:100%;padding:0;border:1px solid #29465b;background:#0b1721;color:var(--text);border-radius:14px;overflow:hidden;position:relative;text-align:left;cursor:pointer}.card:active{transform:scale(.985)}
+.cardImg{height:132px;background:#02070b;display:flex;align-items:center;justify-content:center;overflow:hidden}.cardImg img{display:block;width:auto;height:auto;max-width:100%;max-height:132px;object-fit:contain}
+.cardBody{padding:10px}.card h3{font-size:15px;margin:0 0 4px}.card p{font-size:11px;color:var(--muted);margin:0;line-height:1.4}.cardHint{display:block;margin-top:7px;color:#7dd3fc;font-size:10px;font-weight:800}
+.badge{position:absolute;top:7px;right:7px;background:#0b1721ee;border:1px solid #436176;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:900}.locked{filter:grayscale(1);opacity:.48;cursor:default}.complete{color:#5ee0a0!important}.footer{font-size:11px;color:#8da4b2;text-align:center;line-height:1.6;padding:4px 8px}
+.flash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:50;background:radial-gradient(circle,#fff,#f0abfc88,transparent 65%)}.flash.on{animation:flash .55s ease}@keyframes flash{25%{opacity:1}100%{opacity:0}}
+.toast{position:fixed;z-index:70;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translate(-50%,20px);max-width:calc(100% - 32px);padding:11px 16px;border-radius:999px;background:#133223;color:#d8ffe8;border:1px solid #2d9d6c;font-weight:900;font-size:13px;opacity:0;pointer-events:none;transition:.25s}.toast.show{opacity:1;transform:translate(-50%,0)}
+.modal{position:fixed;z-index:80;inset:0;display:none;background:rgba(0,0,0,.82);padding:12px;overflow-y:auto}.modal.open{display:block}.modalCard{max-width:660px;margin:12px auto 34px;background:#0c1721;border:1px solid #3b5a70;border-radius:20px;overflow:hidden;box-shadow:0 25px 80px #000}.modalTop{position:sticky;top:-1px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;background:#0c1721ee;border-bottom:1px solid #29465b;backdrop-filter:blur(10px)}.modalTop h2{margin:0;font-size:21px}.closeBtn{border:1px solid #436176;background:#172635;color:#fff;border-radius:999px;padding:9px 13px;font-weight:900}.modalBody{padding:14px}.modalArt{display:flex;align-items:center;justify-content:center;min-height:190px;background:#02070b;border-radius:15px;overflow:hidden}.modalArt img{width:auto;height:auto;max-width:100%;max-height:360px;object-fit:contain}.modalMeta{margin:12px 0;padding:11px;border:1px solid #31506a;border-radius:13px;background:#09131c;font-size:13px;line-height:1.6}.pageBlock{margin-top:12px;padding:12px;background:#0b1b28;border:1px solid #31506a;border-radius:15px}.pageBlock h3{margin:0 0 9px;color:#7dd3fc;font-size:16px}.modalFacts{display:grid;grid-template-columns:1fr;gap:8px}.modalFact{padding:10px;background:#07121b;border-radius:10px}.modalFact b{display:block;color:#9ee5ff;font-size:12px;margin-bottom:3px}.modalFact span{font-size:15px;line-height:1.5;font-weight:750}.modalLocked{color:#8095a3;text-align:center;padding:20px 8px}
+@media(min-width:620px){.grid{grid-template-columns:repeat(2,1fr)}.modalFacts{grid-template-columns:1fr 1fr}}
+@media(max-width:430px){.resultHeader{display:block}.tagRow{justify-content:flex-start;margin-top:7px}.facts{grid-template-columns:1fr}.fact{min-height:0}.artFrame{min-height:190px}.row{grid-template-columns:82px 1fr}.cardImg{height:112px}.cardImg img{max-height:112px}}
 </style>
 </head>
 <body>
 <div id="flash" class="flash"></div>
+<div id="toast" class="toast"></div>
 <main class="app">
 <header class="topbar">
-  <div class="brand"><div class="logo">⚗️</div><div><h1>いきもの研究所</h1><small>IKIMONO LAB v0.2</small></div></div>
+  <div class="brand"><div class="logo">⚗️</div><div><h1>いきもの研究所</h1><small>IKIMONO LAB v0.3</small></div></div>
   <div class="points">💎 <span id="points">0</span></div>
 </header>
 <section class="stats">
@@ -87,21 +73,24 @@ box-shadow:0 0 30px rgba(56,189,248,.25),inset 0 0 24px rgba(56,189,248,.17);tra
   <div class="stat"><b id="pages">0/12</b><span>調査カード</span></div>
 </section>
 <section class="panel pad">
-  <h2>研究パックを選ぼう！</h2><p class="sub">3回調査すると、その生き物の研究が完成します。</p>
+  <h2>研究パックを選ぼう！</h2>
+  <p class="sub">パック内の研究が全部終わると「完成」になり、選べなくなります。</p>
   <div id="packList" class="packs"></div>
 </section>
 <section class="panel">
   <div class="stage">
     <div id="packView">
-      <div id="bag" class="bag"><div class="bagLogo">🧬</div><strong id="packName">ぜんぶパック</strong><small>未発見を優先調査</small></div>
+      <div id="bag" class="bag"><div class="bagLogo">🧬</div><strong id="packName">ぜんぶパック</strong><small id="bagStatus">未発見を優先調査</small></div>
       <button id="openBtn" class="open">研究パックを開ける！</button>
-      <p class="sub" style="margin-top:10px">4回目以降の重複は、ほかが未完成なら出ません。</p>
+      <p class="sub" style="margin-top:10px">研究完成後の4回目以降は、ほかが未完成なら出ません。</p>
     </div>
     <div id="result" class="result">
-      <div id="heroImg" class="heroImg">
-        <div class="heroHead"><span id="typeTag" class="typeTag"></span><span id="rarity" class="rarity"></span></div>
-        <div class="nameBlock"><h2 id="creatureName"></h2><div id="latin" class="latin"></div></div>
+      <div class="resultHeader">
+        <div><h2 id="creatureName"></h2><div id="latin" class="latin"></div></div>
+        <div class="tagRow"><span id="typeTag" class="typeTag"></span><span id="rarity" class="rarity"></span></div>
       </div>
+      <div class="artFrame"><img id="heroImg" alt=""></div>
+      <p class="imageNote">説明は画像内の小文字ではなく、下の読みやすい欄を基準にしてください。</p>
       <div id="facts" class="facts"></div>
       <div class="data">
         <div class="row"><b>生息・時代</b><span id="habitat"></span></div>
@@ -110,16 +99,22 @@ box-shadow:0 0 30px rgba(56,189,248,.25),inset 0 0 24px rgba(56,189,248,.17);tra
         <div class="row"><b>調査状況</b><span id="progress"></span></div>
       </div>
       <div class="evidence"><b>証拠・確認：</b><span id="evidenceText"></span></div>
-      <div class="actions"><button id="againBtn" class="action again">もう一度</button><button id="notebookBtn" class="action notebookBtn">研究ノートへ</button></div>
+      <div class="actions"><button id="againBtn" class="action again">続けてもう1回引く</button></div>
     </div>
   </div>
 </section>
 <section id="notebook" class="panel pad">
-  <div class="sectionHead"><div><h2>研究ノート</h2><div class="filterNote">未発見・調査中・完成がひと目で分かります</div></div></div>
+  <div class="sectionHead"><div><h2>研究ノート</h2><div class="filterNote">発見済みカードをタップすると、大きく開いて読み返せます</div></div></div>
   <div id="grid" class="grid"></div>
 </section>
 <div class="footer">ゲーム内レア度と現実の希少性は別です。UMAは未確認として、証拠の強さも表示します。</div>
 </main>
+<div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-label="研究ノート詳細">
+  <div class="modalCard">
+    <div class="modalTop"><h2 id="modalTitle"></h2><button id="modalClose" class="closeBtn">閉じる ×</button></div>
+    <div id="modalBody" class="modalBody"></div>
+  </div>
+</div>
 <script>
 (function(){
 const imgs={
@@ -165,45 +160,158 @@ const creatures=[
  [["強い証拠","標本・DNA・繰り返せる観察"],["弱い証拠","一度だけの遠い目撃"],["確認状況","現在は未確認"],["研究メモ","謎を楽しみつつ証拠を比べる"]]
  ]}
 ];
-const key="ikimonoLabV02"; let state; try{state=JSON.parse(localStorage.getItem(key))||{draws:0,points:0,records:{},last:null,sinceNew:0,pack:"all"}}catch(e){state={draws:0,points:0,records:{},last:null,sinceNew:0,pack:"all"}}
+const key="ikimonoLabV02";
+let state;
+try{state=JSON.parse(localStorage.getItem(key))||{draws:0,points:0,records:{},last:null,sinceNew:0,pack:"all"}}
+catch(e){state={draws:0,points:0,records:{},last:null,sinceNew:0,pack:"all"}}
+state.records=state.records||{};state.pack=state.pack||"all";state.draws=state.draws||0;state.points=state.points||0;state.sinceNew=state.sinceNew||0;
 const $=id=>document.getElementById(id);
 function save(){localStorage.setItem(key,JSON.stringify(state))}
 function record(id){return state.records[id]||{count:0,pages:0}}
-function candidates(){
- let pool=creatures.filter(c=>c.packs.includes(state.pack));
- let incomplete=pool.filter(c=>record(c.id).pages<3);
- if(incomplete.length) pool=incomplete;
- let undiscovered=pool.filter(c=>record(c.id).pages===0);
- if(undiscovered.length && state.sinceNew>=2) pool=undiscovered;
- if(pool.length>1 && state.last){let noSame=pool.filter(c=>c.id!==state.last);if(noSame.length)pool=noSame}
- let weighted=[];pool.forEach(c=>{let p=record(c.id).pages,w=p===0?6:p===1?3:p===2?2:1;for(let i=0;i<w;i++)weighted.push(c)});
- return weighted;
+function packCreatures(id){return creatures.filter(c=>c.packs.includes(id))}
+function packProgress(id){
+ const list=packCreatures(id),max=list.length*3;
+ let pages=0;list.forEach(c=>pages+=Math.min(record(c.id).pages,3));
+ return {pages:pages,max:max,done:max>0&&pages>=max}
 }
-function draw(){
- const weighted=candidates(),c=weighted[Math.floor(Math.random()*weighted.length)],r=record(c.id),isNew=r.pages===0,page=Math.min(r.pages,2);
- r.count++;if(r.pages<3)r.pages++;state.records[c.id]=r;state.draws++;state.points+=isNew?100:25;state.sinceNew=isNew?0:state.sinceNew+1;state.last=c.id;save();show(c,page,isNew);render();
+function allComplete(){return creatures.every(c=>record(c.id).pages>=3)}
+function firstIncompletePack(){
+ const order=["all","big","danger","ancient","uma"];
+ return order.find(id=>!packProgress(id).done)||"all"
+}
+function candidates(){
+ let pool=packCreatures(state.pack);
+ let incomplete=pool.filter(c=>record(c.id).pages<3);
+ if(incomplete.length)pool=incomplete;
+ let undiscovered=pool.filter(c=>record(c.id).pages===0);
+ if(undiscovered.length&&state.sinceNew>=2)pool=undiscovered;
+ if(pool.length>1&&state.last){
+   let noSame=pool.filter(c=>c.id!==state.last);
+   if(noSame.length)pool=noSame
+ }
+ let weighted=[];
+ pool.forEach(c=>{
+   let p=record(c.id).pages,w=p===0?8:p===1?4:p===2?2:1;
+   for(let i=0;i<w;i++)weighted.push(c)
+ });
+ return weighted
+}
+function ensureActivePack(){
+ if(packProgress(state.pack).done&&!allComplete()){
+   state.pack=firstIncompletePack();save();showToast("完成したパックを閉じ、次の未完成パックへ移動しました")
+ }
+}
+function performDraw(direct){
+ ensureActivePack();
+ if(allComplete()){
+   render();
+   $("againBtn").disabled=true;
+   $("againBtn").textContent="全研究完成！";
+   showToast("すべての研究が完成しました！");
+   return
+ }
+ const weighted=candidates();
+ if(!weighted.length){render();showToast("このパックの研究は完成しています");return}
+ const c=weighted[Math.floor(Math.random()*weighted.length)],r=record(c.id),isNew=r.pages===0,page=Math.min(r.pages,2);
+ r.count++;if(r.pages<3)r.pages++;state.records[c.id]=r;state.draws++;state.points+=isNew?100:25;state.sinceNew=isNew?0:state.sinceNew+1;state.last=c.id;
+ save();show(c,page,isNew);render();
+ if(allComplete()){
+   $("againBtn").disabled=true;
+   $("againBtn").textContent="全研究完成！";
+   showToast("全生物・全調査カードを完成しました！");
+ }else if(packProgress(state.pack).done){
+   showToast((packs.find(p=>p.id===state.pack)||{name:"研究"}).name+"パック完成！");
+ }
 }
 function show(c,page,isNew){
- $("packView").style.display="none";$("result").style.display="block";$("heroImg").style.backgroundImage=`url(${c.image})`;$("typeTag").textContent=c.type;
- const names=["","ノーマル","レア","激レア","超激レア","極レア"];$("rarity").textContent="★".repeat(c.rarity)+" "+names[c.rarity];
+ $("packView").style.display="none";$("result").style.display="block";$("result").classList.remove("loading");
+ $("heroImg").src=c.image;$("heroImg").alt=c.name+"の写実風イラスト";$("typeTag").textContent=c.type;
+ const names=["","ノーマル","レア","激レア","超激レア","極レア"];
+ $("rarity").textContent="★".repeat(c.rarity)+" "+names[c.rarity];
  $("creatureName").textContent=c.name;$("latin").textContent=c.latin;$("habitat").textContent=c.habitat;$("size").textContent=c.size;$("food").textContent=c.food;
- $("progress").textContent=`${record(c.id).pages}/3枚 ${record(c.id).pages===3?"研究完成！":isNew?"新発見！":"調査更新"}`;$("evidenceText").textContent=c.evidence;
- $("facts").innerHTML="";c.cards[page].forEach(x=>{let d=document.createElement("div");d.className="fact";d.innerHTML=`<b>${x[0]}</b><span>${x[1]}</span>`;$("facts").appendChild(d)});
+ $("progress").textContent=record(c.id).pages+"/3枚 "+(record(c.id).pages===3?"研究完成！":isNew?"新発見！":"調査更新");
+ $("evidenceText").textContent=c.evidence;$("facts").innerHTML="";
+ c.cards[page].forEach(x=>{let d=document.createElement("div");d.className="fact";let b=document.createElement("b"),s=document.createElement("span");b.textContent=x[0];s.textContent=x[1];d.append(b,s);$("facts").appendChild(d)});
  if(c.rarity>=4){$("flash").classList.remove("on");void $("flash").offsetWidth;$("flash").classList.add("on")}
 }
-function showPack(){$("result").style.display="none";$("packView").style.display="block";$("openBtn").disabled=false}
+function showPack(){
+ $("result").style.display="none";$("packView").style.display="block";$("openBtn").disabled=allComplete();
+}
 function renderPacks(){
- $("packList").innerHTML="";packs.forEach(p=>{let b=document.createElement("button");b.className="packBtn"+(state.pack===p.id?" active":"");b.innerHTML=`<span>${p.icon}</span>${p.name}`;b.onclick=()=>{state.pack=p.id;save();$("packName").textContent=p.name+"パック";renderPacks()};$("packList").appendChild(b)});
- $("packName").textContent=(packs.find(p=>p.id===state.pack)||packs[0]).name+"パック";
+ $("packList").innerHTML="";
+ packs.forEach(p=>{
+   const prog=packProgress(p.id),b=document.createElement("button");
+   b.className="packBtn"+(state.pack===p.id&&!prog.done?" active":"")+(prog.done?" done":"");
+   b.disabled=prog.done;
+   b.innerHTML='<span class="packIcon">'+p.icon+'</span>'+p.name+'<small>'+prog.pages+'/'+prog.max+' 調査</small>';
+   b.onclick=()=>{state.pack=p.id;save();$("packName").textContent=p.name+"パック";renderPacks();updateBag()};
+   $("packList").appendChild(b)
+ });
+ $("packName").textContent=(packs.find(p=>p.id===state.pack)||packs[0]).name+"パック"
+}
+function updateBag(){
+ const prog=packProgress(state.pack);
+ $("bagStatus").textContent=allComplete()?"全研究完成！":prog.pages+"/"+prog.max+" 調査済み";
+ $("openBtn").disabled=allComplete()||prog.done;
+ $("openBtn").textContent=allComplete()?"全研究完成！":"研究パックを開ける！"
 }
 function render(){
- $("draws").textContent=state.draws;$("points").textContent=state.points;let found=0,pages=0;creatures.forEach(c=>{let r=record(c.id);if(r.pages>0)found++;pages+=r.pages});
+ $("draws").textContent=state.draws;$("points").textContent=state.points;
+ let found=0,pages=0;creatures.forEach(c=>{let r=record(c.id);if(r.pages>0)found++;pages+=Math.min(r.pages,3)});
  $("found").textContent=found+"/"+creatures.length;$("pages").textContent=pages+"/"+(creatures.length*3);$("grid").innerHTML="";
- creatures.forEach(c=>{let r=record(c.id),card=document.createElement("div");card.className="card"+(r.pages?"":" locked");card.innerHTML=`<div class="cardImg" style="background-image:url('${c.image}')"></div><span class="badge ${r.pages===3?"complete":""}">${r.pages===3?"完成":r.pages+"/3"}</span><div class="cardBody"><h3>${r.pages?c.name:"未発見"}</h3><p>${r.pages?c.type:"研究パックから発見しよう"}</p></div>`;$("grid").appendChild(card)});
+ creatures.forEach(c=>{
+   let r=record(c.id),card=document.createElement("button");
+   card.type="button";card.className="card"+(r.pages?"":" locked");card.disabled=!r.pages;
+   const img=document.createElement("div");img.className="cardImg";
+   if(r.pages){const pic=document.createElement("img");pic.src=c.image;pic.alt=c.name;img.appendChild(pic)}
+   else{img.textContent="？";img.style.fontSize="44px"}
+   const badge=document.createElement("span");badge.className="badge "+(r.pages===3?"complete":"");badge.textContent=r.pages===3?"完成":r.pages+"/3";
+   const body=document.createElement("div");body.className="cardBody";
+   const h=document.createElement("h3");h.textContent=r.pages?c.name:"未発見";
+   const p=document.createElement("p");p.textContent=r.pages?c.type:"研究パックから発見しよう";
+   body.append(h,p);
+   if(r.pages){const hint=document.createElement("span");hint.className="cardHint";hint.textContent="タップして大きく見る";body.appendChild(hint)}
+   card.append(img,badge,body);card.onclick=()=>openDetail(c.id);$("grid").appendChild(card)
+ });
+ renderPacks();updateBag()
 }
-$("openBtn").onclick=()=>{$("openBtn").disabled=true;$("bag").classList.add("shake");setTimeout(()=>{$("bag").classList.remove("shake");draw()},430)};
-$("againBtn").onclick=showPack;$("notebookBtn").onclick=()=>$("notebook").scrollIntoView({behavior:"smooth"});
-renderPacks();render();showPack();
+function openDetail(id){
+ const c=creatures.find(x=>x.id===id),r=record(id);if(!c||!r.pages)return;
+ $("modalTitle").textContent=c.name+"　"+r.pages+"/3";
+ const body=$("modalBody");body.innerHTML="";
+ const art=document.createElement("div");art.className="modalArt";const img=document.createElement("img");img.src=c.image;img.alt=c.name;art.appendChild(img);body.appendChild(art);
+ const meta=document.createElement("div");meta.className="modalMeta";meta.innerHTML="<b>"+c.type+"</b><br>生息・時代："+escapeHtml(c.habitat)+"<br>大きさ："+escapeHtml(c.size)+"<br>食べ物："+escapeHtml(c.food)+"<br>証拠・確認："+escapeHtml(c.evidence);body.appendChild(meta);
+ for(let i=0;i<3;i++){
+   const block=document.createElement("section");block.className="pageBlock";
+   const title=document.createElement("h3");title.textContent="調査カード "+(i+1)+(i<r.pages?"　解放済み":"　未解放");block.appendChild(title);
+   if(i<r.pages){
+     const facts=document.createElement("div");facts.className="modalFacts";
+     c.cards[i].forEach(x=>{const f=document.createElement("div");f.className="modalFact";const b=document.createElement("b"),s=document.createElement("span");b.textContent=x[0];s.textContent=x[1];f.append(b,s);facts.appendChild(f)});
+     block.appendChild(facts)
+   }else{
+     const locked=document.createElement("div");locked.className="modalLocked";locked.textContent="もう一度この生き物を調査すると開きます";block.appendChild(locked)
+   }
+   body.appendChild(block)
+ }
+ $("detailModal").classList.add("open");document.body.style.overflow="hidden"
+}
+function closeDetail(){$("detailModal").classList.remove("open");document.body.style.overflow=""}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+let toastTimer;
+function showToast(text){clearTimeout(toastTimer);$("toast").textContent=text;$("toast").classList.add("show");toastTimer=setTimeout(()=>$("toast").classList.remove("show"),2200)}
+$("openBtn").onclick=()=>{
+ $("openBtn").disabled=true;$("bag").classList.add("shake");
+ setTimeout(()=>{$("bag").classList.remove("shake");performDraw(false)},360)
+};
+$("againBtn").onclick=()=>{
+ $("result").classList.add("loading");$("againBtn").textContent="調査中…";
+ setTimeout(()=>{performDraw(true);$("againBtn").textContent="続けてもう1回引く"},260)
+};
+$("modalClose").onclick=closeDetail;
+$("detailModal").onclick=e=>{if(e.target===$("detailModal"))closeDetail()};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDetail()});
+ensureActivePack();render();showPack();
 })();
 </script>
-</body></html>
+</body>
+</html>
