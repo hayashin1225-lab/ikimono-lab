@@ -596,6 +596,7 @@ function chooseCreature(){
  return pool[Math.floor(Math.random()*pool.length)];
 }
 function doDraw(){
+ lastUnlockIndex=null;
  if(pageCount()>=CREATURES.length*3){alert('全研究完成です！'); return;}
  if(isPackComplete(currentPack)){ const next=PACKS.find(p=>!isPackComplete(p.id)); if(next) currentPack=next.id; renderPacks(); updatePackLabel(); }
  const c=chooseCreature();
@@ -603,7 +604,10 @@ function doDraw(){
  const wasNew=rec.count===0;
  state.draws+=1;
  rec.count+=1;
- if(rec.pages<3) rec.pages+=1;
+ if(rec.pages<3){
+   rec.pages+=1;
+   lastUnlockIndex=rec.pages-1;
+ }
  state.lastId=c.id;
  saveState();
  currentCreature=c;
