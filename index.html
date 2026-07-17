@@ -574,11 +574,6 @@ function renderPacks(){
    btn.addEventListener('click',()=>{currentPack=p.id; updatePackLabel(); renderPacks();});
    wrap.appendChild(btn);
  }
- if(isPackComplete(currentPack)){
-   const next=PACKS.find(p=>!isPackComplete(p.id));
-   currentPack=next?next.id:'all';
-   updatePackLabel();
- }
 }
 function updatePackLabel(){ const p=PACKS.find(x=>x.id===currentPack); el('packName').textContent=p.name+'パック'; el('packSub').textContent=isPackComplete(currentPack)?'研究完成済みです':'未完成の研究を優先'; }
 function chooseCreature(){
@@ -596,7 +591,11 @@ function chooseCreature(){
 function doDraw(){
  lastUnlockIndex=null;
  if(pageCount()>=CREATURES.length*3){alert('全研究完成です！'); return;}
- if(isPackComplete(currentPack)){ const next=PACKS.find(p=>!isPackComplete(p.id)); if(next) currentPack=next.id; renderPacks(); updatePackLabel(); }
+ if(isPackComplete(currentPack)){
+   alert('このパックの研究は完了しました！ ほかのパックを選んでください。');
+   showBag();
+   return;
+ }
  const c=chooseCreature();
  const rec=getRecord(c.id);
  const wasNew=rec.count===0;
