@@ -305,6 +305,17 @@ body{overscroll-behavior-x:none}
 .textDetails summary{padding:13px 15px;cursor:pointer;color:#cfefff;font-weight:900;list-style:none}
 .textDetails summary::-webkit-details-marker{display:none}.textDetails summary::after{content:'＋';float:right}.textDetails[open] summary::after{content:'−'}
 .textDetails .data,.textDetails .fact{margin:0 10px 10px}
+.researchStatusHost{margin-top:10px;min-width:0}
+.researchStatusCard{background:#091723;border:1px solid #29465b;border-radius:16px;padding:14px;text-align:left;min-width:0}
+.researchStatusHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;color:#cfefff}
+.researchStatusHeader b{font-size:16px}.researchStatusHeader span{font-size:13px;color:#a7c7d9}
+.researchStatusScale{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:10px 0}
+.researchStatusStep{min-width:0;border:1px solid #355067;border-radius:9px;padding:7px 2px;text-align:center;font-size:12px;font-weight:900;color:#b9d2df;background:#0c1926}
+.researchStatusCurrent{border-color:#facc15;background:#43380b;color:#fff7c2;box-shadow:inset 0 0 0 1px #facc15}.researchStatusCurrent::after{content:'現在';display:block;font-size:10px;margin-top:2px}
+.researchStatusRows{display:grid;gap:7px;margin-top:10px}.researchStatusRow{display:grid;grid-template-columns:minmax(0,108px) minmax(0,1fr);gap:8px;font-size:14px;line-height:1.5}.researchStatusRow b{color:#7dd3fc}.researchStatusRow span{min-width:0;overflow-wrap:anywhere}
+.researchStatusBadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.researchStatusBadge{border:1px solid #698e51;background:#193222;color:#dcfce7;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900}
+.researchStatusNotice{margin:10px 0 0;padding:10px;border-radius:10px;background:#102537;color:#d8ecf6;font-size:14px;line-height:1.5;overflow-wrap:anywhere}.researchStatusNotice strong{display:block;margin-bottom:3px;color:#fff}
+@media(max-width:420px){.researchStatusCard{padding:12px}.researchStatusRow{grid-template-columns:88px minmax(0,1fr);font-size:13px}.researchStatusStep{font-size:11px;padding:6px 1px}}
 .imageNote{text-align:center;margin:8px 4px 0}
 .noteInfoVisual{position:relative;background:#06111b;padding:0!important;overflow:visible}
 .noteInfoVisual img{display:block;width:100%;height:auto;max-height:none!important;object-fit:contain!important;border-radius:0!important}
@@ -396,7 +407,7 @@ body{overscroll-behavior-x:none}
         <div class="row"><b>大きさ</b><span id="size"></span></div>
         <div class="row"><b>食べ物</b><span id="food"></span></div>
       </div>
-      <div class="fact" style="margin-top:10px"><b>証拠・確認</b><span id="evidenceText"></span></div>
+      <div id="researchStatus" class="researchStatusHost"></div>
     </details>
     <div class="quickActions">
       <button id="continueBtn" class="primary">続けて引く</button>
@@ -423,7 +434,7 @@ body{overscroll-behavior-x:none}
       <p><b>生息・時代：</b><span id="modalHabitat"></span></p>
       <p><b>大きさ：</b><span id="modalSize"></span></p>
       <p><b>食べ物：</b><span id="modalFood"></span></p>
-      <p><b>証拠・確認：</b><span id="modalEvidence"></span></p>
+       <div id="modalResearchStatus" class="researchStatusHost"></div>
     </div>
     <div id="modalCards" class="cardsCol"></div>
   </div>
@@ -486,6 +497,17 @@ const SPECIAL_RESEARCH={
     sourceCardIndex:2,
     description:'決まった場所に魚が集まり、順番に掃除を受けます。'
   }
+};
+const RESEARCH_STATUS={
+  whale:{kind:'real',statusCode:'LC',statusLabel:'低危険',scope:'世界全体',assessmentYear:'2008',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:['CITES 附属書I'],note:'世界全体の評価です。地域や個体群によって状況が異なる場合があります。'},
+  cobra:{kind:'real',statusCode:'VU',statusLabel:'危急',scope:'世界全体',assessmentYear:'2012',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:['CITES 附属書II'],note:'生息地の減少や捕獲などが保全上の課題です。'},
+  sarco:{kind:'ancient',fossilEvidence:'頭骨、歯、背骨などの化石が見つかっています。',knownMaterial:'複数の頭骨と部分骨格が知られていますが、全身が完全につながった1個体ではありません。',reconstructionConfidence:'頭骨や基本的な体形は化石から比較的確かに復元できます。',unknownParts:'体色、皮膚の細かな模様、鳴き声、行動の細部は推定です。',verifiedOn:'2026-07-18'},
+  mogour:{kind:'uma',confirmation:'未確認生物（UMA）',specimen:'科学的に検証できる標本は確認されていません。',evidenceTypes:'目撃証言や伝承が中心です。',scientificReview:'既知の生物とは別の生物だと確定できる、再現可能な証拠が不足しています。',alternatives:'既知の動物の見間違い、距離、光、波、記憶の変化などの可能性があります。',verifiedOn:'2026-07-18'},
+  amazon:{kind:'real',statusCode:'EN',statusLabel:'危機',scope:'世界全体',assessmentYear:'2018',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:[],note:'混獲、河川環境の分断、汚染などが保全上の課題です。'},
+  manta:{kind:'real',statusCode:'EN',statusLabel:'危機',scope:'世界全体',assessmentYear:'2019',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:['CITES 附属書II'],note:'繁殖の速度が遅く、漁業による捕獲や混獲の影響を受けやすい生物です。'},
+  matsudai:{kind:'real',statusCode:'LC',statusLabel:'低危険',scope:'世界全体',assessmentYear:'2012',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:[],note:'LCは絶滅のおそれがゼロという意味ではありません。'},
+  fugu:{kind:'real',statusCode:'NA',statusLabel:'単一評価なし',scope:'複数種の総称',assessmentYear:'',source:'種類ごとに確認が必要',verifiedOn:'2026-07-18',protections:[],note:'Takifugu spp.は複数のフグ類を表すため、1つのIUCN区分にはまとめません。種類ごとに評価が異なります。'},
+  cleaner:{kind:'real',statusCode:'LC',statusLabel:'低危険',scope:'世界全体',assessmentYear:'2008',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:[],note:'LCは絶滅のおそれがゼロという意味ではありません。'}
 };
 const hasPack=(c,id)=>c.pack===id || (Array.isArray(c.packs)&&c.packs.includes(id));
 const PACKS=[
@@ -609,8 +631,69 @@ function playDrawEffect(c,wasNew,done){
 }
 function specialResearchFor(c){ return SPECIAL_RESEARCH[c.id]; }
 function specialResearchImage(c,special){
- const sourceCard=c.cards[special.sourceCardIndex];
- return sourceCard&&sourceCard.image?sourceCard.image:c.hero;
+  const sourceCard=c.cards[special.sourceCardIndex];
+  return sourceCard&&sourceCard.image?sourceCard.image:c.hero;
+}
+function researchStatusFor(c){ return RESEARCH_STATUS[c.id]||null; }
+function statusElement(tag,className,text){ const node=document.createElement(tag); if(className) node.className=className; if(text!==undefined) node.textContent=text; return node; }
+function appendStatusRow(rows,label,value){ const row=statusElement('div','researchStatusRow'); row.append(statusElement('b','',label),statusElement('span','',value)); rows.appendChild(row); }
+function renderResearchStatus(c,target){
+  const status=researchStatusFor(c);
+  const card=statusElement('section','researchStatusCard');
+  const header=statusElement('div','researchStatusHeader');
+  const rows=statusElement('div','researchStatusRows');
+  if(!status || !['real','ancient','uma'].includes(status.kind)){
+    header.append(statusElement('b','','確認情報'));
+    card.append(header,statusElement('div','researchStatusNotice',c.evidence));
+    target.replaceChildren(card);
+    return;
+  }
+  if(status.kind==='real'){
+    header.append(statusElement('b','','保全ステータス'),statusElement('span','','IUCN Red List'));
+    card.appendChild(header);
+    if(['LC','NT','VU','EN','CR'].includes(status.statusCode)){
+      const scale=statusElement('div','researchStatusScale');
+      for(const code of ['LC','NT','VU','EN','CR']){
+        const step=statusElement('div','researchStatusStep',code);
+        if(code===status.statusCode){ step.classList.add('researchStatusCurrent'); step.setAttribute('aria-current','true'); }
+        scale.appendChild(step);
+      }
+      card.appendChild(scale);
+      card.appendChild(statusElement('div','researchStatusNotice','ゲーム内の★レア度とは別の指標です。'));
+      appendStatusRow(rows,'現在の評価',`${status.statusCode}（${status.statusLabel}）`);
+      appendStatusRow(rows,'評価の範囲',status.scope);
+      appendStatusRow(rows,'評価年',status.assessmentYear);
+      appendStatusRow(rows,'情報源',status.source);
+    }else{
+      const notice=statusElement('div','researchStatusNotice');
+      notice.append(statusElement('strong','',status.statusLabel),statusElement('span','Takifugu spp.は複数種の総称です。'));
+      card.appendChild(notice);
+      appendStatusRow(rows,'評価の範囲',status.scope);
+      appendStatusRow(rows,'情報源',status.source);
+    }
+    if(status.note) card.appendChild(statusElement('div','researchStatusNotice',status.note));
+    if(status.protections&&status.protections.length){
+      const badges=statusElement('div','researchStatusBadges');
+      for(const protection of status.protections) badges.appendChild(statusElement('span','researchStatusBadge',protection));
+      card.appendChild(badges);
+    }
+  }else if(status.kind==='ancient'){
+    header.append(statusElement('b','','化石からわかること'),statusElement('span','','絶滅した古代生物'));
+    card.append(header,statusElement('div','researchStatusNotice','現生種の保全評価ではなく、化石からの復元情報です。'));
+    appendStatusRow(rows,'化石証拠',status.fossilEvidence);
+    appendStatusRow(rows,'見つかっている部分',status.knownMaterial);
+    appendStatusRow(rows,'復元の確かさ',status.reconstructionConfidence);
+    appendStatusRow(rows,'推定・未解明',status.unknownParts);
+  }else{
+    header.append(statusElement('b','','確認状況'),statusElement('span','','未確認生物（UMA）'));
+    card.append(header,statusElement('div','researchStatusNotice','目撃談があることと、実在が科学的に確認されたことは別です。'));
+    appendStatusRow(rows,'標本',status.specimen);
+    appendStatusRow(rows,'証拠の種類',status.evidenceTypes);
+    appendStatusRow(rows,'科学的検証',status.scientificReview);
+    appendStatusRow(rows,'別の説明',status.alternatives);
+  }
+  card.appendChild(rows);
+  target.replaceChildren(card);
 }
 function renderSpecialUnlock(c){
  const box=el('specialUnlock');
@@ -644,7 +727,7 @@ function createSpecialResearchCard(c,pages){
  return block;
 }
 function renderResult(c){
- el('creatureName').textContent=c.name; el('latin').textContent=c.latin; el('typeTag').textContent=c.type; el('rareTag').textContent=c.rarity; el('heroImg').src=c.hero; el('heroImg').alt=c.name+'のインフォグラフィック'; el('habitat').textContent=c.habitat; el('size').textContent=c.size; el('food').textContent=c.food; el('progress').textContent=`${getRecord(c.id).pages}/3 研究済み`; el('evidenceText').textContent=c.evidence;
+  el('creatureName').textContent=c.name; el('latin').textContent=c.latin; el('typeTag').textContent=c.type; el('rareTag').textContent=c.rarity; el('heroImg').src=c.hero; el('heroImg').alt=c.name+'のインフォグラフィック'; el('habitat').textContent=c.habitat; el('size').textContent=c.size; el('food').textContent=c.food; el('progress').textContent=`${getRecord(c.id).pages}/3 研究済み`; renderResearchStatus(c,el('researchStatus'));
  const pagesUnlocked=getRecord(c.id).pages;
  renderSpecialUnlock(c);
  const memo=el('resultTop');
@@ -699,7 +782,7 @@ function openModal(c){
   el('modalImg').src=c.hero; el('modalImg').alt=c.name+'のインフォグラフィック';
   el('modalType').textContent=c.type; el('modalHabitat').textContent=c.habitat;
   el('modalSize').textContent=c.size; el('modalFood').textContent=c.food;
-  el('modalEvidence').textContent=c.evidence;
+  renderResearchStatus(c,el('modalResearchStatus'));
   const wrap=el('modalCards'); wrap.innerHTML='';
   for(let i=0;i<3;i++){
     const block=document.createElement('div'); block.className='cardBlock';
