@@ -491,7 +491,7 @@ const SPECIAL_RESEARCH={
 const hasPack=(c,id)=>c.pack===id || (Array.isArray(c.packs)&&c.packs.includes(id));
 const PACKS=[
   {id:'all',emoji:'🌐',name:'ぜんぶ',includes:c=>true},
-  {id:'big',emoji:'🐋',name:'大型',includes:c=>hasPack(c,'big')},
+  {id:'big',emoji:'🐋',name:'ビッグ',includes:c=>hasPack(c,'big')},
   {id:'danger',emoji:'☠️',name:'危険',includes:c=>hasPack(c,'danger')},
   {id:'ancient',emoji:'🦴',name:'古代',includes:c=>hasPack(c,'ancient')},
   {id:'uma',emoji:'❓',name:'UMA',includes:c=>hasPack(c,'uma')},
