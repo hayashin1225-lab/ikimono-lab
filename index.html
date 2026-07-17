@@ -499,7 +499,7 @@ const SPECIAL_RESEARCH={
   }
 };
 const RESEARCH_STATUS={
-  whale:{kind:'real',statusCode:'LC',statusLabel:'低危険',scope:'世界全体',assessmentYear:'2008',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:['CITES 附属書I'],note:'世界全体の評価です。地域や個体群によって状況が異なる場合があります。'},
+  whale:{kind:'real',statusCode:'LC',statusLabel:'低危険',scope:'世界全体',assessmentYear:'2018',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:['CITES 附属書I'],note:'世界全体の評価です。地域や個体群によって状況が異なる場合があります。'},
   cobra:{kind:'real',statusCode:'VU',statusLabel:'危急',scope:'世界全体',assessmentYear:'2012',source:'IUCN Red List',verifiedOn:'2026-07-18',protections:['CITES 附属書II'],note:'生息地の減少や捕獲などが保全上の課題です。'},
   sarco:{kind:'ancient',fossilEvidence:'頭骨、歯、背骨などの化石が見つかっています。',knownMaterial:'複数の頭骨と部分骨格が知られていますが、全身が完全につながった1個体ではありません。',reconstructionConfidence:'頭骨や基本的な体形は化石から比較的確かに復元できます。',unknownParts:'体色、皮膚の細かな模様、鳴き声、行動の細部は推定です。',verifiedOn:'2026-07-18'},
   mogour:{kind:'uma',confirmation:'未確認生物（UMA）',specimen:'科学的に検証できる標本は確認されていません。',evidenceTypes:'目撃証言や伝承が中心です。',scientificReview:'既知の生物とは別の生物だと確定できる、再現可能な証拠が不足しています。',alternatives:'既知の動物の見間違い、距離、光、波、記憶の変化などの可能性があります。',verifiedOn:'2026-07-18'},
@@ -631,8 +631,8 @@ function playDrawEffect(c,wasNew,done){
 }
 function specialResearchFor(c){ return SPECIAL_RESEARCH[c.id]; }
 function specialResearchImage(c,special){
-  const sourceCard=c.cards[special.sourceCardIndex];
-  return sourceCard&&sourceCard.image?sourceCard.image:c.hero;
+ const sourceCard=c.cards[special.sourceCardIndex];
+ return sourceCard&&sourceCard.image?sourceCard.image:c.hero;
 }
 function researchStatusFor(c){ return RESEARCH_STATUS[c.id]||null; }
 function statusElement(tag,className,text){ const node=document.createElement(tag); if(className) node.className=className; if(text!==undefined) node.textContent=text; return node; }
@@ -649,9 +649,13 @@ function renderResearchStatus(c,target){
     return;
   }
   if(status.kind==='real'){
-    header.append(statusElement('b','','保全ステータス'),statusElement('span','','IUCN Red List'));
+    const formalIucnCodes=['LC','NT','VU','EN','CR','DD','NE','EW','EX'];
+    const mainScaleCodes=['LC','NT','VU','EN','CR'];
+    const isFormalIucn=formalIucnCodes.includes(status.statusCode);
+    const isMainScale=mainScaleCodes.includes(status.statusCode);
+    header.append(statusElement('b','','保全ステータス'),statusElement('span','',isFormalIucn?'IUCN Red List':'種類ごとに確認'));
     card.appendChild(header);
-    if(['LC','NT','VU','EN','CR'].includes(status.statusCode)){
+    if(isMainScale){
       const scale=statusElement('div','researchStatusScale');
       for(const code of ['LC','NT','VU','EN','CR']){
         const step=statusElement('div','researchStatusStep',code);
@@ -666,7 +670,7 @@ function renderResearchStatus(c,target){
       appendStatusRow(rows,'情報源',status.source);
     }else{
       const notice=statusElement('div','researchStatusNotice');
-      notice.append(statusElement('strong','',status.statusLabel),statusElement('span','Takifugu spp.は複数種の総称です。'));
+      notice.append(statusElement('strong','',status.statusLabel),statusElement('span','','Takifugu spp.は複数種の総称です。'));
       card.appendChild(notice);
       appendStatusRow(rows,'評価の範囲',status.scope);
       appendStatusRow(rows,'情報源',status.source);
