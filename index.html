@@ -2,32 +2,230 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#082f49">
   <title>いきもの研究所</title>
   <style>
-    body {
-      margin: 0;
-      padding: 40px 20px;
-      text-align: center;
-      font-family: sans-serif;
-      background: #e8f7ff;
-      color: #123;
+    :root{
+      --bg1:#082f49;--bg2:#0e7490;--card:#ffffff;--ink:#123;--muted:#52606d;
+      --accent:#f59e0b;--accent2:#22c55e;--line:#d7e3ea;--shadow:0 14px 34px rgba(2,24,43,.22)
     }
-    button {
-      padding: 16px 28px;
-      font-size: 20px;
-      border: 0;
-      border-radius: 14px;
-      background: #087f5b;
-      color: white;
-    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;background:linear-gradient(160deg,var(--bg1),var(--bg2));color:var(--ink);min-height:100vh}
+    button{font:inherit;touch-action:manipulation}
+    .app{max-width:720px;margin:0 auto;padding:18px 14px calc(34px + env(safe-area-inset-bottom))}
+    .hero{color:#fff;text-align:center;padding:10px 8px 18px}
+    .hero h1{margin:0;font-size:clamp(28px,8vw,44px);letter-spacing:.03em}
+    .hero p{margin:8px 0 0;color:#d9f7ff;font-weight:700}
+    .statusbar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 12px}
+    .status{background:rgba(255,255,255,.94);border-radius:14px;padding:10px;text-align:center;box-shadow:var(--shadow)}
+    .status b{display:block;font-size:20px;color:#075985}.status span{font-size:12px;color:var(--muted)}
+    .panel{background:rgba(255,255,255,.97);border-radius:22px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+    .lab-stage{min-height:315px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden}
+    .pack{width:188px;height:220px;border-radius:24px;background:linear-gradient(145deg,#fef3c7,#f59e0b);border:6px solid #fff7d6;box-shadow:0 16px 30px rgba(120,53,15,.28);display:flex;flex-direction:column;justify-content:center;align-items:center;transform:rotate(-2deg);transition:.35s ease}
+    .pack .mark{font-size:66px}.pack strong{font-size:22px;color:#78350f}.pack small{font-weight:800;color:#92400e;margin-top:5px}
+    .pack.opening{animation:shake .7s ease-in-out infinite}
+    @keyframes shake{0%,100%{transform:rotate(-2deg) translateX(0)}25%{transform:rotate(3deg) translateX(7px)}75%{transform:rotate(-5deg) translateX(-7px)}}
+    .open-btn,.again-btn,.book-btn{border:0;border-radius:999px;padding:15px 22px;font-weight:900;box-shadow:0 8px 18px rgba(0,0,0,.16);cursor:pointer}
+    .open-btn{margin-top:18px;background:#16a34a;color:#fff;font-size:20px;width:min(330px,100%)}
+    .open-btn:active,.again-btn:active,.book-btn:active{transform:translateY(2px)}
+    .hint{font-size:13px;color:var(--muted);margin:10px 0 0}
+    .reveal{display:none;width:100%;animation:pop .5s ease}
+    @keyframes pop{0%{transform:scale(.75);opacity:0}100%{transform:scale(1);opacity:1}}
+    .rarity{display:inline-block;border-radius:999px;padding:7px 15px;font-weight:1000;color:#fff;background:#64748b;box-shadow:0 5px 14px rgba(0,0,0,.15)}
+    .stars{font-size:24px;color:#f59e0b;letter-spacing:2px;margin:8px 0}
+    .creature-icon{font-size:92px;line-height:1;margin:6px 0;filter:drop-shadow(0 8px 10px rgba(2,24,43,.22))}
+    .creature-name{font-size:32px;font-weight:1000;margin:4px 0}.kind{display:inline-block;background:#e0f2fe;color:#075985;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:900}
+    .new-info{margin:13px auto 0;background:#ecfeff;border:2px solid #67e8f9;border-radius:18px;padding:14px;text-align:left;max-width:520px}
+    .new-info h3{margin:0 0 9px;color:#0e7490;font-size:18px}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    .info-chip{background:white;border:1px solid #cde3eb;border-radius:13px;padding:10px;min-height:78px}.info-chip b{display:block;color:#0e7490;font-size:12px}.info-chip span{font-size:14px;font-weight:750}
+    .evidence{margin-top:9px;border-radius:12px;padding:9px 11px;background:#fff7ed;color:#9a3412;font-size:13px;font-weight:800}
+    .button-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.again-btn{background:#16a34a;color:white}.book-btn{background:#0ea5e9;color:white}
+    .section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section-title h2{margin:0;font-size:21px}.reset{border:0;background:#eef2f7;color:#475569;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800}
+    .collection{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .creature-card{border:1px solid var(--line);border-radius:17px;padding:12px;background:#f8fbfd;min-height:145px;position:relative}.creature-card.locked{filter:grayscale(1);opacity:.55}.creature-card .mini-icon{font-size:42px}.creature-card h3{font-size:15px;margin:5px 0}.creature-card p{font-size:12px;color:var(--muted);margin:3px 0}.badge{display:inline-block;border-radius:999px;background:#dff7e8;color:#166534;font-size:11px;font-weight:900;padding:4px 7px}.pages{position:absolute;right:10px;top:10px;font-size:11px;font-weight:900;color:#075985;background:#e0f2fe;padding:4px 7px;border-radius:999px}
+    .note{font-size:12px;color:#d9f7ff;text-align:center;padding:6px 10px 0;line-height:1.6}
+    .flash{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(250,204,21,.55),transparent 67%);opacity:0;z-index:9}.flash.on{animation:flash .85s ease}@keyframes flash{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+    @media(min-width:620px){.collection{grid-template-columns:repeat(4,1fr)}}
   </style>
 </head>
 <body>
-  <h1>🧪 いきもの研究所</h1>
-  <p id="message">親子で育てる研究所、準備完了！</p>
-  <button onclick="document.getElementById('message').textContent='🐋 動いた！ 次はゲームを入れよう！'">
-    起動テスト
-  </button>
+  <div id="flash" class="flash"></div>
+  <main class="app">
+    <header class="hero">
+      <h1>🧪 いきもの研究所</h1>
+      <p>親子で育てる ふしぎ生物コレクション</p>
+    </header>
+
+    <section class="statusbar" aria-label="研究記録">
+      <div class="status"><b id="drawCount">0</b><span>調査回数</span></div>
+      <div class="status"><b id="foundCount">0/8</b><span>発見した生物</span></div>
+      <div class="status"><b id="pageCount">0/24</b><span>インフォカード</span></div>
+    </section>
+
+    <section class="panel lab-stage">
+      <div id="packView">
+        <div id="pack" class="pack">
+          <div class="mark">🌏</div>
+          <strong>研究パック</strong>
+          <small>なにが出るかは お楽しみ</small>
+        </div>
+        <button id="openBtn" class="open-btn" type="button">パックを開ける！</button>
+        <p class="hint">同じ生き物が出ると、新しいインフォカードが開くことがあります。</p>
+      </div>
+
+      <div id="reveal" class="reveal" aria-live="polite">
+        <div id="rarity" class="rarity">ノーマル</div>
+        <div id="stars" class="stars">★</div>
+        <div id="creatureIcon" class="creature-icon">🐋</div>
+        <div id="creatureName" class="creature-name">シロナガスクジラ</div>
+        <div id="kind" class="kind">実在する生き物</div>
+        <div class="new-info">
+          <h3 id="infoTitle">NEW！ からだカード</h3>
+          <div class="info-grid">
+            <div class="info-chip"><b id="label1">大きさ</b><span id="value1">地球最大級</span></div>
+            <div class="info-chip"><b id="label2">ごはん</b><span id="value2">小さなオキアミ</span></div>
+            <div class="info-chip"><b id="label3">すごい力</b><span id="value3">遠くまで届く低い声</span></div>
+            <div class="info-chip"><b id="label4">研究メモ</b><span id="value4">巨大でも食べ物は小さい</span></div>
+          </div>
+          <div id="evidence" class="evidence">確認度：実在が確認されています</div>
+        </div>
+        <div class="button-row">
+          <button id="againBtn" class="again-btn" type="button">もう一度</button>
+          <button id="bookBtn" class="book-btn" type="button">研究ノートを見る</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="notebook" class="panel">
+      <div class="section-title">
+        <h2>📚 研究ノート</h2>
+        <button id="resetBtn" class="reset" type="button">記録をリセット</button>
+      </div>
+      <div id="collection" class="collection"></div>
+    </section>
+
+    <p class="note">ゲーム上のレア度と、現実の絶滅危惧度は別のものです。UMAは「未確認」として表示します。</p>
+  </main>
+
+  <script>
+    (function(){
+      var creatures = [
+        {id:"bluewhale",name:"シロナガスクジラ",icon:"🐋",type:"実在する生き物",rarity:5,weight:4,evidence:"確認度：実在が確認されています",cards:[
+          ["でかさカード","大きさ","大型バスよりずっと長い","ごはん","小さなオキアミ","すごい力","地球最大級の動物","研究メモ","巨大でも食べ物は小さい"],
+          ["くらしカード","すむ場所","世界中の海","移動","季節に合わせて長距離移動","声","低い声が遠くまで届く","研究メモ","海の中で音を使う"],
+          ["まもるカード","危機","船との衝突や海の騒音","回復","捕鯨禁止後も見守り中","調べ方","音や写真で個体を確認","研究メモ","大きいほど安全とは限らない"]
+        ]},
+        {id:"manta",name:"オニイトマキエイ",icon:"🌊",type:"実在する生き物",rarity:4,weight:7,evidence:"確認度：実在が確認されています",cards:[
+          ["からだカード","横幅","大人が何人も並ぶほど","ごはん","プランクトン","すごい力","大きなヒレで空を飛ぶように泳ぐ","研究メモ","毒針はありません"],
+          ["ごはんカード","口","大きく開ける","食べ方","海水から小さな生物をこし取る","道具","頭の前のヒレで水を集める","研究メモ","体は巨大でも小さな物を食べる"],
+          ["まもるカード","危機","漁具にかかることがある","成長","子どもの数が多くない","観察","模様で個体を見分けられる","研究メモ","おなかの模様は名札のよう"]
+        ]},
+        {id:"iguana",name:"ウミイグアナ",icon:"🦎",type:"実在する生き物",rarity:3,weight:14,evidence:"確認度：実在が確認されています",cards:[
+          ["海にもぐるカード","すむ場所","ガラパゴス諸島","ごはん","海藻","すごい力","海にもぐるトカゲ","研究メモ","冷えた体を日なたで温める"],
+          ["からだカード","しっぽ","泳ぐため平たい","鼻","余分な塩を外に出す","色","黒っぽく熱を吸収しやすい","研究メモ","海と陸の両方を使う"],
+          ["まもるカード","危機","外来生物や環境変化","弱点","海水温で食べ物が変わる","観察","島ごとに姿が少し違う","研究メモ","島の環境に合わせて進化した"]
+        ]},
+        {id:"kingcobra",name:"キングコブラ",icon:"🐍",type:"実在する生き物",rarity:3,weight:15,evidence:"確認度：実在が確認されています",cards:[
+          ["毒と牙カード","長さ","毒ヘビの中で最長級","ごはん","ほかのヘビ","すごい力","首を広げて大きく見せる","研究メモ","名前にコブラとある大型種"],
+          ["子育てカード","巣","落ち葉を集めて作る","行動","卵を守る","感覚","においや振動を使う","研究メモ","巣を作る珍しいヘビ"],
+          ["安全カード","危険","強い毒を持つ","人との関係","多くは人を避ける","守り方","近づかず専門家に任せる","研究メモ","危険生物ほど距離が大切"]
+        ]},
+        {id:"gaboon",name:"ガボンアダー",icon:"🐍",type:"実在する生き物",rarity:4,weight:8,evidence:"確認度：実在が確認されています",cards:[
+          ["かくれんぼカード","模様","落ち葉そっくり","牙","毒ヘビでも特に長い牙","動き","待ち伏せが得意","研究メモ","派手な模様が森では迷彩になる"],
+          ["からだカード","頭","幅広い三角形","体","太くて重い","ごはん","小型の哺乳類など","研究メモ","速く追うより動かず待つ"],
+          ["安全カード","危険","強い毒を持つ","見つけ方","足元の落ち葉に注意","行動","刺激しなければ動かないことも","研究メモ","触らず離れるのが最優先"]
+        ]},
+        {id:"megamouth",name:"メガマウスザメ",icon:"🦈",type:"実在する生き物",rarity:5,weight:4,evidence:"確認度：実在が確認されています",cards:[
+          ["巨大な口カード","発見","1970年代に知られた","ごはん","プランクトン","すごい力","大きな口で海水を取り込む","研究メモ","大口でも人を追うサメではない"],
+          ["深海カード","すむ場所","深い海から表層まで","行動","夜に浅い所へ来ることがある","体","やわらかい印象の体","研究メモ","まだ分からないことが多い"],
+          ["研究カード","珍しさ","目撃や標本が少ない","調べ方","混獲個体などから研究","分類","プランクトン食の大型ザメ","研究メモ","新しい発見が続く生き物"]
+        ]},
+        {id:"megalodon",name:"メガロドン",icon:"🦈",type:"絶滅した生き物",rarity:5,weight:3,evidence:"確認度：化石から存在が確認されています。現在は絶滅しています",cards:[
+          ["巨大ザメカード","証拠","巨大な歯の化石","大きさ","現生のホホジロザメより大型","ごはん","海の大型動物","研究メモ","全身骨格はほとんど残らない"],
+          ["化石カード","歯","手のひら級のものもある","時代","はるか昔の海","分布","世界各地で化石が見つかる","研究メモ","サメは軟骨なので歯が残りやすい"],
+          ["謎カード","絶滅理由","海の変化や獲物の変化など","現在","生存を示す確かな証拠なし","研究","化石から生態を推理","研究メモ","昔いた事実と今いる説は別"]
+        ]},
+        {id:"nessie",name:"ネッシー",icon:"❓",type:"UMA・未確認",rarity:5,weight:2,evidence:"確認度：未確認。確かな標本や再現可能な証拠はありません",cards:[
+          ["目撃カード","場所","スコットランドのネス湖","姿","長い首のように語られる","証拠","写真や目撃談","研究メモ","有名でも確認済みとは限らない"],
+          ["正体候補カード","候補1","波や流木","候補2","既知の動物の見間違い","候補3","写真の加工や作り物","研究メモ","一つの説明に決めつけない"],
+          ["証拠カード","強い証拠","標本・DNA・繰り返せる観察","弱い証拠","一度だけのぼやけた写真","考え方","面白さと事実確認を両立","研究メモ","謎は証拠を考える入口になる"]
+        ]}
+      ];
+
+      var rarityNames=["","ノーマル","レア","激レア","超激レア","極レア"];
+      var rarityColors=["","#64748b","#2563eb","#7c3aed","#ea580c","#dc2626"];
+      var key="ikimonoLabV01";
+      var state=loadState();
+      var current=null;
+
+      var packView=document.getElementById("packView"),pack=document.getElementById("pack"),openBtn=document.getElementById("openBtn"),reveal=document.getElementById("reveal");
+      openBtn.addEventListener("click",openPack);
+      document.getElementById("againBtn").addEventListener("click",showPack);
+      document.getElementById("bookBtn").addEventListener("click",function(){document.getElementById("notebook").scrollIntoView({behavior:"smooth"});});
+      document.getElementById("resetBtn").addEventListener("click",resetState);
+
+      function loadState(){
+        try{return JSON.parse(localStorage.getItem(key))||{draws:0,found:{}};}catch(e){return{draws:0,found:{}};}
+      }
+      function saveState(){localStorage.setItem(key,JSON.stringify(state));}
+      function pickCreature(){
+        var total=0,i,r;
+        for(i=0;i<creatures.length;i++)total+=creatures[i].weight;
+        r=Math.random()*total;
+        for(i=0;i<creatures.length;i++){r-=creatures[i].weight;if(r<=0)return creatures[i];}
+        return creatures[0];
+      }
+      function openPack(){
+        openBtn.disabled=true;pack.classList.add("opening");
+        setTimeout(function(){
+          pack.classList.remove("opening");current=pickCreature();
+          state.draws++;
+          if(!state.found[current.id])state.found[current.id]={count:0,pages:0};
+          state.found[current.id].count++;
+          var pageIndex=state.found[current.id].pages;
+          var isNewPage=pageIndex<current.cards.length;
+          if(isNewPage)state.found[current.id].pages++;
+          else pageIndex=(state.found[current.id].count-1)%current.cards.length;
+          saveState();showReveal(current,current.cards[pageIndex],isNewPage);renderAll();
+        },900);
+      }
+      function showReveal(c,card,isNewPage){
+        packView.style.display="none";reveal.style.display="block";
+        document.getElementById("rarity").textContent=rarityNames[c.rarity];
+        document.getElementById("rarity").style.background=rarityColors[c.rarity];
+        document.getElementById("stars").textContent="★".repeat(c.rarity);
+        document.getElementById("creatureIcon").textContent=c.icon;
+        document.getElementById("creatureName").textContent=c.name;
+        document.getElementById("kind").textContent=c.type;
+        document.getElementById("infoTitle").textContent=(isNewPage?"NEW！ ":"再発見！ ")+card[0];
+        document.getElementById("label1").textContent=card[1];document.getElementById("value1").textContent=card[2];
+        document.getElementById("label2").textContent=card[3];document.getElementById("value2").textContent=card[4];
+        document.getElementById("label3").textContent=card[5];document.getElementById("value3").textContent=card[6];
+        document.getElementById("label4").textContent=card[7];document.getElementById("value4").textContent=card[8];
+        document.getElementById("evidence").textContent=c.evidence;
+        if(c.rarity>=4){var f=document.getElementById("flash");f.classList.remove("on");void f.offsetWidth;f.classList.add("on");}
+      }
+      function showPack(){reveal.style.display="none";packView.style.display="block";openBtn.disabled=false;}
+      function renderAll(){
+        var ids=Object.keys(state.found),pages=0,i;
+        for(i=0;i<ids.length;i++)pages+=state.found[ids[i]].pages;
+        document.getElementById("drawCount").textContent=state.draws;
+        document.getElementById("foundCount").textContent=ids.length+"/"+creatures.length;
+        document.getElementById("pageCount").textContent=pages+"/"+(creatures.length*3);
+        var box=document.getElementById("collection");box.innerHTML="";
+        for(i=0;i<creatures.length;i++){
+          var c=creatures[i],rec=state.found[c.id],div=document.createElement("div");
+          div.className="creature-card"+(rec?"":" locked");
+          div.innerHTML='<span class="pages">'+(rec?rec.pages:0)+'/3</span><div class="mini-icon">'+(rec?c.icon:"❔")+'</div><h3>'+(rec?c.name:"未発見")+'</h3><p>'+(rec?c.type:"研究パックから発見しよう")+'</p><span class="badge">'+(rec?("発見 "+rec.count+"回"):"LOCK")+'</span>';
+          box.appendChild(div);
+        }
+      }
+      function resetState(){
+        if(confirm("研究記録をすべて消しますか？")){state={draws:0,found:{}};saveState();renderAll();showPack();}
+      }
+      renderAll();
+    })();
+  </script>
 </body>
 </html>
