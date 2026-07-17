@@ -584,15 +584,13 @@ function updatePackLabel(){ const p=PACKS.find(x=>x.id===currentPack); el('packN
 function chooseCreature(){
  let pool=creaturesInPack(currentPack);
  if(!pool.length) pool=[...CREATURES];
- const incomplete=pool.filter(c=>!isCompleteCreature(c));
- if(incomplete.length) pool=incomplete;
+ pool=pool.filter(c=>(state.found[c.id]?.pages||0)<3);
+ const minPages=Math.min(...pool.map(c=>state.found[c.id]?.pages||0));
+ pool=pool.filter(c=>(state.found[c.id]?.pages||0)===minPages);
  if(pool.length>1 && state.lastId){
    const noRepeat=pool.filter(c=>c.id!==state.lastId);
    if(noRepeat.length) pool=noRepeat;
  }
- // prioritize not yet found within pool
- const unfound=pool.filter(c=>(state.found[c.id]?.count||0)===0);
- if(unfound.length) pool=Math.random()<0.78?unfound:pool;
  return pool[Math.floor(Math.random()*pool.length)];
 }
 function doDraw(){
