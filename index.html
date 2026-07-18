@@ -579,6 +579,8 @@ function chooseCreature(){
  let pool=creaturesInPack(currentPack);
  if(!pool.length) pool=[...CREATURES];
  pool=pool.filter(c=>(state.found[c.id]?.pages||0)<3);
+ const undiscovered=pool.filter(c=>(state.found[c.id]?.count||0)===0);
+ if(undiscovered.length) pool=undiscovered;
  const minPages=Math.min(...pool.map(c=>state.found[c.id]?.pages||0));
  pool=pool.filter(c=>(state.found[c.id]?.pages||0)===minPages);
  if(pool.length>1 && state.lastId){
