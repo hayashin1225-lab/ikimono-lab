@@ -6,16 +6,22 @@
 
 ## 状態
 
-- Draft
-- Interpreting
-- Figma Proposed
-- Human Approved
-- Ready for Implementation
-- Implemented
-- Under Review
-- Published
-- Human Confirmed
-- Closed
+現在状態として次から一つを記載する：
+
+- CAPTURED
+- INTERPRETING
+- FIGMA_REQUIRED
+- FIGMA_PROPOSED
+- HUMAN_REVIEW
+- APPROVED
+- SPEC_READY
+- IMPLEMENTING
+- PR_OPEN
+- AUDITING
+- MERGED
+- PUBLISHED
+- HUMAN_CONFIRMED
+- CLOSED
 
 ## 原発話
 
