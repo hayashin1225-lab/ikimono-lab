@@ -668,6 +668,9 @@ function renderResearchStatus(c,target){
       }
       card.appendChild(scale);
       if(status.assessmentYear) card.appendChild(statusElement('div','researchStatusMeta',`${status.assessmentYear}年評価`));
+    }else if(isFormalIucn){
+      card.appendChild(statusElement('div','researchStatusNotice','通常の5段階とは別の区分です。'));
+      if(status.assessmentYear) card.appendChild(statusElement('div','researchStatusMeta',`${status.assessmentYear}年評価`));
     }else{
       const notice=statusElement('div','researchStatusNotice');
       notice.append(statusElement('strong','',status.statusLabel),statusElement('span','','Takifugu spp.は複数種の総称です。'));
@@ -695,7 +698,7 @@ function renderResearchStatus(c,target){
     appendStatusRow(rows,'科学的検証',status.scientificReview);
     appendStatusRow(rows,'別の説明',status.alternatives);
   }
-  card.appendChild(rows);
+  if(rows.childElementCount) card.appendChild(rows);
   target.replaceChildren(card);
 }
 function renderSpecialUnlock(c){
