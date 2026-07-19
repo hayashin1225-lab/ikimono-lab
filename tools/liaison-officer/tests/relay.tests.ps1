@@ -32,18 +32,20 @@ try {
   Invoke-Case 'SelfTest executes against fake GitHub and Codex CLIs without removing existing state' {
     & $git -C $repo update-ref refs/remotes/origin/main HEAD
     $fakeGh=Join-Path $sandbox 'fake-gh.cmd'; $fakeCodex=Join-Path $sandbox 'fake-codex.cmd'
-    @'
+@'
 @echo off
-if "%1"=="auth" echo authenticated& exit /b 0
-if "%1"=="api" echo {"login":"owner"}& exit /b 0
-if "%1"=="repo" echo {"nameWithOwner":"owner/repo"}& exit /b 0
-if "%1"=="label" echo [{"name":"gm-approved"},{"name":"ready-for-codex"},{"name":"codex-running"},{"name":"awaiting-gm-review"},{"name":"codex-failed"}]& exit /b 0
+echo %1 %2>> "%FAKE_GH_CALL_LOG%"
+if "%1"=="auth" ( echo authenticated & exit /b 0 )
+if "%1"=="api" ( echo {"login":"owner"} & exit /b 0 )
+if "%1"=="repo" ( echo {"nameWithOwner":"owner/repo"} & exit /b 0 )
+if "%1"=="label" ( echo [{"name":"gm-approved"},{"name":"ready-for-codex"},{"name":"codex-running"},{"name":"awaiting-gm-review"},{"name":"codex-failed"}] & exit /b 0 )
 exit /b 1
 '@ | Set-Content -Encoding ASCII $fakeGh
     "@echo off`r`necho fake codex`r`nexit /b 0" | Set-Content -Encoding ASCII $fakeCodex
+    $callLog=Join-Path $sandbox 'fake-gh.calls.log'; New-Item -ItemType File -Force -Path $callLog|Out-Null; $env:FAKE_GH_CALL_LOG=$callLog
     $stateFile=Join-Path $config.StatePath 'keep.txt'; New-Item -ItemType Directory -Force -Path $config.StatePath|Out-Null; 'keep'|Set-Content $stateFile
     $self=[pscustomobject]@{RepoPath=$repo;GitPath=$git;GhPath=$fakeGh;CodexPath=$fakeCodex;repository='owner/repo';baseBranch='main';codexSubcommand='exec';LogPath=$config.LogPath;StatePath=$config.StatePath;TempPath=$config.TempPath;requiredLabels=@('gm-approved','ready-for-codex','codex-running','awaiting-gm-review','codex-failed')}
-    Test-SelfTest $self; if(-not(Test-Path $stateFile)){throw 'SelfTest removed existing state.'}
+    Test-SelfTest $self; if(-not(Test-Path $stateFile)){throw 'SelfTest removed existing state.'}; $calls=@(Get-Content $callLog); foreach($expected in @('auth status','api user','repo view','label list')){if($calls -notcontains $expected){throw "SelfTest did not call fake gh: $expected"}}
   }
 
   Invoke-Case 'worker legal change is verified and only verified path is stageable' {
