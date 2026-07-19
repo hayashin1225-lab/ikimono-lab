@@ -10,7 +10,9 @@
 
 対象はOpenで、`gm-approved` と `ready-for-codex` があり、`codex-running`、`awaiting-gm-review`、`codex-failed` がないIssueだけである。複数候補は作成日時が古い順、同時刻はIssue番号が小さい順に一件だけ選ぶ。Issue #13はBootstrap Issueのため実行対象にしない。
 
-初回実行で規定ブランチ、リモートブランチ、Open PRが存在すれば停止する。再作業は既存Open PR、規定head、Issue参照、前回の実行ID、新しい修正要求、承認ラベルがそろう場合だけ同じブランチとPRを再利用する。
+初回実行で規定ブランチ、リモートブランチ、Open PRが存在すれば停止する。再作業は既存Open PR、local・remote・PR head SHAの一致、Issue参照、前回の実行ID、新しい修正要求、承認ラベルがそろう場合だけ同じブランチとPRを再利用する。
+
+再作業の新しい修正要求は、Issueコメントに `LIAISON_REWORK_APPROVED` を含め、対象の既存PR番号または既存head SHAを明記して記録する。`gm-approved` と `ready-for-codex` の再付与も必須である。再作業後は既存PRへrun ID、Issue番号、前後head SHA、承認コメントID、Codex報告、実行済み検査、ローカルログID、未実施の人間確認を構造化コメントとして残す。
 
 ## 排他と状態
 

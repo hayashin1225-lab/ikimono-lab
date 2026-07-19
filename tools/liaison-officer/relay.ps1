@@ -105,6 +105,23 @@ function Save-IssueSnapshot($Config, $Issue, [string]$RunDirectory) {
   $path = Join-Path $RunDirectory 'issue-snapshot.md'; [IO.File]::WriteAllText($path, ($lines -join "`r`n"), [Text.UTF8Encoding]::new($false)); return $path
 }
 function Quote-ProcessArgument([string]$Value) { if ($Value -notmatch '[\s"]') { return $Value }; return '"' + ($Value -replace '(\\*)"','$1$1\"' -replace '(\\*)$','$1$1') + '"' }
+function Get-ProcessTreeIds([int]$RootProcessId) {
+  # CIM is preferred on current Windows; WMI keeps the runtime usable on Windows PowerShell 5.1 hosts.
+  $ids = New-Object System.Collections.Generic.List[int]
+  $pending = New-Object System.Collections.Queue
+  $ids.Add($RootProcessId); $pending.Enqueue($RootProcessId)
+  try {
+    while ($pending.Count -gt 0) {
+      $parentId = [int]$pending.Dequeue()
+      try { $children = Get-CimInstance -ClassName Win32_Process -Filter "ParentProcessId=$parentId" -ErrorAction Stop } catch { $children = Get-WmiObject -Class Win32_Process -Filter "ParentProcessId=$parentId" -ErrorAction Stop }
+      foreach ($child in @($children)) { $childId = [int]$child.ProcessId; if (-not $ids.Contains($childId)) { $ids.Add($childId); $pending.Enqueue($childId) } }
+    }
+  } catch { Write-Result "Process-tree child discovery was unavailable: $($_.Exception.Message)" }
+  return @($ids | Sort-Object -Unique)
+}
+function Get-RemainingProcessIds([int[]]$ProcessIds) {
+  return @($ProcessIds | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
+}
 function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotPath, [string]$RunDirectory) {
   $template = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PSScriptRoot 'prompt-template.txt')
   $prompt = $template.Replace('{{ISSUE_SNAPSHOT_PATH}}',$SnapshotPath).Replace('{{BRANCH}}',$Branch).Replace('{{REPOSITORY}}',$Config.repository)
@@ -115,11 +132,26 @@ function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotP
   $process = New-Object System.Diagnostics.Process; $process.StartInfo = $info
   if (-not $process.Start()) { throw 'Codex process did not start.' }
   $process.StandardInput.Write($prompt); $process.StandardInput.Close(); $outTask = $process.StandardOutput.ReadToEndAsync(); $errTask = $process.StandardError.ReadToEndAsync()
+  Start-Sleep -Milliseconds 50
+  $treeIds = Get-ProcessTreeIds $process.Id
   $timedOut = -not $process.WaitForExit([int]$Config.timeoutMinutes * 60000)
-  if ($timedOut) { $script:CurrentStage='codex-timeout'; $kill=& taskkill.exe /PID $process.Id /T /F 2>&1; if($LASTEXITCODE -ne 0){throw "Codex timeout; process-tree termination failed: $($kill -join ' ')"}; $process.WaitForExit(); if(-not $process.HasExited){throw 'Codex timeout; orphan process remains.'} }
+  $killPath = Join-Path $RunDirectory 'taskkill.log'
+  $killExitCode = $null
+  if ($timedOut) {
+    $script:CurrentStage='codex-timeout'
+    # cmd.exe keeps taskkill's diagnostic as captured output under PowerShell's Stop preference.
+    $kill = & cmd.exe /d /c "taskkill.exe /PID $($process.Id) /T /F" 2>&1; $killExitCode = $LASTEXITCODE
+    [IO.File]::WriteAllText($killPath, ($kill -join [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $process.WaitForExit()
+  }
   $stdout = $outTask.GetAwaiter().GetResult(); $stderr = $errTask.GetAwaiter().GetResult(); [IO.File]::WriteAllText($stdoutPath,$stdout,[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,$stderr,[Text.UTF8Encoding]::new($false))
-  if($timedOut){throw "Codex timed out after $($Config.timeoutMinutes) minutes; stdout and stderr were saved."}
-  return [pscustomobject]@{ ExitCode = $process.ExitCode; StdoutPath = $stdoutPath; StderrPath = $stderrPath; Stdout = $stdout }
+  if($timedOut){
+    $remaining = @(Get-RemainingProcessIds $treeIds)
+    if($killExitCode -ne 0){throw "Codex timeout; taskkill failed (exit $killExitCode). stdout, stderr, and taskkill logs were saved."}
+    if(-not $process.HasExited -or $remaining.Count -gt 0){throw "Codex timeout; remaining process IDs: $($remaining -join ', '). stdout, stderr, and taskkill logs were saved."}
+    throw "Codex timed out after $($Config.timeoutMinutes) minutes; process tree IDs $($treeIds -join ', ') terminated and logs were saved."
+  }
+  return [pscustomobject]@{ ExitCode = $process.ExitCode; StdoutPath = $stdoutPath; StderrPath = $stderrPath; Stdout = $stdout; ProcessIds = $treeIds }
 }
 function Get-ChangedPaths($Config) {
   $paths = @()
@@ -134,7 +166,7 @@ function Test-WorkerResult($Config, [string]$StartBranch, [string]$StartHead, $W
   if ($Worker.ExitCode -ne 0) { $script:CurrentStage='codex-exit'; throw "Codex exit code: $($Worker.ExitCode)" }
   if ((Get-GitValue $Config @('branch','--show-current')) -ne $StartBranch) { throw 'Codex changed branch.' }
   if ((Get-GitValue $Config @('rev-parse','HEAD')) -ne $StartHead) { throw 'Codex changed HEAD or committed.' }
-  $paths = Get-ChangedPaths $Config; if ($paths.Count -eq 0) { throw 'Codex produced no changes.' }
+  $paths = @(Get-ChangedPaths $Config); if ($paths.Count -eq 0) { throw 'Codex produced no changes.' }
   $check = Invoke-Tool $Config.GitPath @('diff','--check') $Config.RepoPath; if ($check.ExitCode -ne 0) { throw 'git diff --check failed.' }
   foreach ($path in $paths) { foreach ($pattern in $Config.protectedPaths) { $prefix = $pattern.TrimEnd('*'); if ($path -like $pattern -or ($prefix -and $path.StartsWith($prefix))) { throw "Protected path changed: $path" } } }
   $match = [regex]::Match($Worker.Stdout,'LIAISON_REPORT_BEGIN\s*(\{[\s\S]*?\})\s*LIAISON_REPORT_END')
@@ -143,7 +175,7 @@ function Test-WorkerResult($Config, [string]$StartBranch, [string]$StartHead, $W
   foreach ($key in @('status','summary','changedFiles','tests','unresolved','humanReview')) { if ($null -eq $report.$key) { throw "Codex report key is missing: $key" } }
   if ($report.status -ne 'success') { throw "Codex report status is not success: $($report.status)" }
   $reported = @($report.changedFiles | ForEach-Object { Normalize-PathValue $_ } | Sort-Object); $actual = @($paths | Sort-Object)
-  if ((Compare-Object $reported $actual).Count -ne 0) { throw 'Codex report changedFiles does not match actual changes.' }
+  if (@(Compare-Object $reported $actual).Count -ne 0) { throw 'Codex report changedFiles does not match actual changes.' }
   return $report
 }
 function Set-IssueLabels($Config, [int]$IssueNumber, [string[]]$Add, [string[]]$Remove) {
@@ -164,6 +196,11 @@ function Test-SelfTest($Config) {
   $pre = Test-RepositoryPreflight $Config $false
   $auth = Invoke-Tool $Config.GhPath @('auth','status','--hostname','github.com') $Config.RepoPath
   if ($auth.ExitCode -ne 0) { throw 'GitHub CLI authentication is not active.' }
+  $identity = Invoke-Tool $Config.GhPath @('api','user') $Config.RepoPath
+  if ($identity.ExitCode -ne 0) { throw 'GitHub CLI login could not be read.' }
+  try { $login = ((($identity.Output -join "`n") | ConvertFrom-Json).login) } catch { throw 'GitHub CLI user response is invalid.' }
+  $owner = ($Config.repository -split '/')[0]
+  if ($login -ne $owner) { throw "GitHub CLI login $login does not match repository owner $owner." }
   $repo = Invoke-Tool $Config.GhPath @('repo','view',$Config.repository,'--json','nameWithOwner') $Config.RepoPath
   if ($repo.ExitCode -ne 0) { throw 'Configured repository is not accessible.' }
   foreach ($args in @(@('--version'),@('--help'),@($Config.codexSubcommand,'--help'))) { $check = Invoke-Tool $Config.CodexPath $args $Config.RepoPath; if ($check.ExitCode -ne 0) { throw "Codex CLI check failed: $($args -join ' ')" } }
@@ -171,7 +208,7 @@ function Test-SelfTest($Config) {
   foreach ($path in @($Config.LogPath,$Config.StatePath,$Config.TempPath)) { $parent = Split-Path -Parent $path; if (-not (Test-Path $parent)) { $parent = Split-Path -Parent $parent }; if (-not (Test-Path $parent)) { throw "Runtime parent directory is not available: $path" } }
   $stateExisted=Test-Path $Config.StatePath; $runtimeRoot=Split-Path -Parent $Config.StatePath; $runtimeExisted=Test-Path $runtimeRoot; $probe = Join-Path $Config.StatePath ".probe-$PID.lock"
   try { New-Item -ItemType Directory -Force -Path $Config.StatePath | Out-Null; $stream = New-Object IO.FileStream($probe,[IO.FileMode]::CreateNew,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None); $stream.Dispose(); foreach($path in @($Config.LogPath,$Config.TempPath)){New-Item -ItemType Directory -Force -Path $path | Out-Null; $file=Join-Path $path ".probe-$PID"; [IO.File]::WriteAllText($file,'probe'); Remove-Item $file -Force} } finally { if(Test-Path $probe){Remove-Item $probe -Force}; if(-not $stateExisted -and (Test-Path $Config.StatePath) -and -not (Get-ChildItem -Force $Config.StatePath | Select-Object -First 1)){Remove-Item $Config.StatePath -Force}; if(-not $runtimeExisted -and (Test-Path $runtimeRoot) -and -not (Get-ChildItem -Force $runtimeRoot | Select-Object -First 1)){Remove-Item $runtimeRoot -Force} }
-  Write-Result "PowerShell=$($PSVersionTable.PSVersion); authenticated repository=$($Config.repository); branch=$($pre.Branch); head=$($pre.Head)"
+  Write-Result "PowerShell=$($PSVersionTable.PSVersion); GitHub login=$login; authenticated repository=$($Config.repository); branch=$($pre.Branch); head=$($pre.Head)"
   Write-Result "Runtime paths: logs=$($Config.LogPath); state=$($Config.StatePath); temp=$($Config.TempPath); missingLabels=$($missing -join ', ')"
 }
 function Invoke-CodexSmokeTest($Config) {
@@ -187,7 +224,7 @@ function Invoke-Once($Config) {
   Acquire-LocalLock $Config $issue.number
   try {
     $script:CurrentStage = 'branch'; $openResult=Invoke-Tool $Config.GhPath @('pr','list','--repo',$Config.repository,'--state','open','--json','number,headRefName,headRefOid,body,createdAt') $Config.RepoPath; if($openResult.ExitCode -ne 0){throw 'Open PR lookup failed.'}; $open=@((($openResult.Output -join "`n")|ConvertFrom-Json)); $issuePattern='(?<![0-9])#'+[regex]::Escape([string]$issue.number)+'(?![0-9])'; $issuePr=@($open|Where-Object{$_.body -match $issuePattern}); $headPr=@($open|Where-Object{$_.headRefName -eq $branch}); $localRef=Invoke-Tool $Config.GitPath @('show-ref','--verify','--quiet',"refs/heads/$branch") $Config.RepoPath; $remoteRef=Invoke-Tool $Config.GitPath @('show-ref','--verify','--quiet',"refs/remotes/origin/$branch") $Config.RepoPath
-    $isRework=$false; if($issuePr.Count -eq 1 -and $headPr.Count -eq 1 -and $issuePr[0].number -eq $headPr[0].number -and $issuePr[0].body -match 'Liaison run ID:' -and $localRef.ExitCode -eq 0 -and $remoteRef.ExitCode -eq 0){$localTip=Get-GitValue $Config @('rev-parse',$branch); $remoteTip=Get-GitValue $Config @('rev-parse',"origin/$branch"); if($localTip -ne $remoteTip -or $localTip -ne $issuePr[0].headRefOid){throw 'Rework branch, remote branch, and PR head SHA do not match.'}; if($issue.updatedAt -le $issuePr[0].createdAt){throw 'Rework requires a newer Issue update after the previous PR.'}; $isRework=$true}
+    $isRework=$false; $reworkApproval=$null; if($issuePr.Count -eq 1 -and $headPr.Count -eq 1 -and $issuePr[0].number -eq $headPr[0].number -and $issuePr[0].body -match 'Liaison run ID:' -and $localRef.ExitCode -eq 0 -and $remoteRef.ExitCode -eq 0){$localTip=Get-GitValue $Config @('rev-parse',$branch); $remoteTip=Get-GitValue $Config @('rev-parse',"origin/$branch"); if($localTip -ne $remoteTip -or $localTip -ne $issuePr[0].headRefOid){throw 'Rework branch, remote branch, and PR head SHA do not match.'}; $issueDetail=Invoke-Tool $Config.GhPath @('issue','view',[string]$issue.number,'--repo',$Config.repository,'--json','comments,labels') $Config.RepoPath; if($issueDetail.ExitCode -ne 0){throw 'Rework approval comments could not be read.'}; $issueState=(($issueDetail.Output -join "`n")|ConvertFrom-Json); $labelNames=@($issueState.labels|ForEach-Object{$_.name}); $approvalPattern='LIAISON_REWORK_APPROVED'; $reworkApproval=@($issueState.comments|Where-Object{$_.body -match $approvalPattern -and ($_.body -match [regex]::Escape("#$($issuePr[0].number)") -or $_.body -match [regex]::Escape($issuePr[0].headRefOid))}|Sort-Object createdAt|Select-Object -Last 1); if('gm-approved' -notin $labelNames -or 'ready-for-codex' -notin $labelNames -or -not $reworkApproval){throw 'Rework requires gm-approved, ready-for-codex, and an explicit LIAISON_REWORK_APPROVED comment naming the existing PR number or head SHA.'}; $isRework=$true}
     if(-not $isRework -and ($localRef.ExitCode -eq 0 -or $remoteRef.ExitCode -eq 0 -or $headPr.Count -gt 0 -or $issuePr.Count -gt 0)){throw 'Initial execution is blocked by an existing local branch, remote branch, matching-head PR, or Issue-referencing Open PR.'}
     $script:CurrentStage = 'github-state'; Set-IssueLabels $Config $issue.number @('codex-running') @(); $confirmed = Invoke-Tool $Config.GhPath @('issue','view',[string]$issue.number,'--repo',$Config.repository,'--json','labels') $Config.RepoPath
     if ($confirmed.ExitCode -ne 0 -or 'codex-running' -notin @((($confirmed.Output -join "`n") | ConvertFrom-Json).labels | ForEach-Object { $_.name })) { throw 'codex-running label was not confirmed.' }
@@ -197,15 +234,17 @@ function Invoke-Once($Config) {
     $script:CurrentStage = 'branch'; $createArgs=if($isRework){@('checkout',$branch)}else{@('checkout','-b',$branch,"origin/$($Config.baseBranch)")}; $create = Invoke-Tool $Config.GitPath $createArgs $Config.RepoPath; if ($create.ExitCode -ne 0) { throw "Branch preparation failed: $($create.Output -join ' ')" }
     $workerStartBranch=Get-GitValue $Config @('branch','--show-current'); $workerStartHead=Get-GitValue $Config @('rev-parse','HEAD')
     $script:CurrentStage = 'codex-start'; $worker = Invoke-CodexWorker $Config $issue $branch $snapshot $runDirectory; $script:CurrentStage = 'validation'; $report = Test-WorkerResult $Config $workerStartBranch $workerStartHead $worker
-    $verifiedPaths=Get-ChangedPaths $Config; $script:CurrentStage = 'commit'; $commit = Invoke-Tool $Config.GitPath (@('add','--') + $verifiedPaths) $Config.RepoPath; if ($commit.ExitCode -ne 0) { throw 'git add failed.' }; $staged=@(Get-GitValue $Config @('diff','--cached','--name-only') -split "`n"|Where-Object{$_}|ForEach-Object{Normalize-PathValue $_}); if((Compare-Object ($verifiedPaths|Sort-Object) ($staged|Sort-Object)).Count -ne 0){throw 'Staged paths differ from verified paths.'}; $cachedCheck=Invoke-Tool $Config.GitPath @('diff','--cached','--check') $Config.RepoPath; if($cachedCheck.ExitCode -ne 0){throw 'git diff --cached --check failed.'}; $commit = Invoke-Tool $Config.GitPath @('commit','-m',"issue #$($issue.number): liaison officer change") $Config.RepoPath; if ($commit.ExitCode -ne 0) { throw 'git commit failed.' }
+    $verifiedPaths=@(Get-ChangedPaths $Config); $script:CurrentStage = 'commit'; $commit = Invoke-Tool $Config.GitPath (@('add','--') + $verifiedPaths) $Config.RepoPath; if ($commit.ExitCode -ne 0) { throw 'git add failed.' }; $staged=@(Get-GitValue $Config @('diff','--cached','--name-only') -split "`n"|Where-Object{$_}|ForEach-Object{Normalize-PathValue $_}); if(@(Compare-Object ($verifiedPaths|Sort-Object) ($staged|Sort-Object)).Count -ne 0){throw 'Staged paths differ from verified paths.'}; $cachedCheck=Invoke-Tool $Config.GitPath @('diff','--cached','--check') $Config.RepoPath; if($cachedCheck.ExitCode -ne 0){throw 'git diff --cached --check failed.'}; $commit = Invoke-Tool $Config.GitPath @('commit','-m',"issue #$($issue.number): liaison officer change") $Config.RepoPath; if ($commit.ExitCode -ne 0) { throw 'git commit failed.' }
     $script:CurrentStage = 'push'; $head = Get-GitValue $Config @('rev-parse','HEAD'); $push = Invoke-Tool $Config.GitPath @('push','-u','origin',$branch) $Config.RepoPath; if ($push.ExitCode -ne 0) { throw 'git push failed.' }
     $body = "Closes #$($issue.number)`n`nLiaison run ID: $RunId`nInitial execution: yes`nBase SHA: $($preflight.Head)`nHead SHA: $head`n`nCodex report: $($report.summary)`n`nAutomated checks: passed`nUnperformed: human review and public verification`nLocal log ID: $RunId"
-    $script:CurrentStage = 'pull-request'; $bodyPath = Join-Path $runDirectory 'pr-body.md'; [IO.File]::WriteAllText($bodyPath,$body,[Text.UTF8Encoding]::new($false)); if($isRework){$pr=[pscustomobject]@{Output=@($issuePr[0].number)}; $update=Invoke-Tool $Config.GhPath @('pr','comment',[string]$issuePr[0].number,'--repo',$Config.repository,'--body',"Liaison run $RunId rework completed.") $Config.RepoPath; if($update.ExitCode -ne 0){throw 'Existing PR update comment failed.'}}else{$pr = Invoke-Tool $Config.GhPath @('pr','create','--repo',$Config.repository,'--base',$Config.baseBranch,'--head',$branch,'--title',"issue #$($issue.number): liaison officer change",'--body-file',$bodyPath) $Config.RepoPath; if ($pr.ExitCode -ne 0) { throw 'PR creation failed.' }}
+    $script:CurrentStage = 'pull-request'; $bodyPath = Join-Path $runDirectory 'pr-body.md'; [IO.File]::WriteAllText($bodyPath,$body,[Text.UTF8Encoding]::new($false)); if($isRework){$pr=[pscustomobject]@{Output=@($issuePr[0].number)}; $reworkBody="Liaison rework record`nRun ID: $RunId`nIssue: #$($issue.number)`nMode: rework`nPrevious head SHA: $workerStartHead`nNew head SHA: $head`nApproval comment: $($reworkApproval[0].id)`nCodex report: $($report.summary)`nAutomated checks: $($report.tests -join '; ')`nLocal log ID: $RunId`nUnperformed: human review and public verification"; $update=Invoke-Tool $Config.GhPath @('pr','comment',[string]$issuePr[0].number,'--repo',$Config.repository,'--body',$reworkBody) $Config.RepoPath; if($update.ExitCode -ne 0){throw 'Existing PR update comment failed.'}}else{$pr = Invoke-Tool $Config.GhPath @('pr','create','--repo',$Config.repository,'--base',$Config.baseBranch,'--head',$branch,'--title',"issue #$($issue.number): liaison officer change",'--body-file',$bodyPath) $Config.RepoPath; if ($pr.ExitCode -ne 0) { throw 'PR creation failed.' }}
     $script:CurrentStage = 'cleanup'; $returnMain = Invoke-Tool $Config.GitPath @('checkout',$Config.baseBranch) $Config.RepoPath; if ($returnMain.ExitCode -ne 0) { throw 'Could not return local repository to the base branch.' }
     if ((Get-GitValue $Config @('status','--porcelain'))) { throw 'Worktree is not clean after successful execution.' }
     $script:CurrentStage = 'github-state'; Set-IssueLabels $Config $issue.number @('awaiting-gm-review') @('codex-running','ready-for-codex','codex-failed'); $successComment=Invoke-Tool $Config.GhPath @('issue','comment',[string]$issue.number,'--repo',$Config.repository,'--body',"Liaison run $RunId completed. PR: $($pr.Output -join '')") $Config.RepoPath; if($successComment.ExitCode -ne 0){throw 'Success comment failed.'}; Write-Result "Completed Issue #$($issue.number)."
   } finally { Release-LocalLock $Config }
 }
+
+if ($env:LIAISON_OFFICER_IMPORT -eq '1') { return }
 
 try {
   $config = Get-Config

@@ -22,6 +22,12 @@
 
 `config.local.json`はGit管理されない。既定のログ、状態、テンポラリは `tools/liaison-officer/.runtime/` 以下に保存され、同じディレクトリのignore規則でGit管理対象外となる。
 
+SelfTestは `gh auth status` に加え `gh api user` で実際のloginを読み、設定したリポジトリownerと一致することを確認する。トークンその他の認証情報は表示・保存しない。
+
+## 再作業の明示承認
+
+既存PRを同じブランチで再利用するには、Issueコメントへ `LIAISON_REWORK_APPROVED` と対象PR番号または現在のhead SHAを記載し、`gm-approved` と `ready-for-codex` を再付与する。単なるラベル操作や本文更新では再作業しない。完了後は既存PRへ実行記録を追記し、新規PRは作成しない。
+
 ## 必須ラベル
 
 連絡将校はラベルを自動作成しない。人間が初回だけ必要に応じて作成する。
