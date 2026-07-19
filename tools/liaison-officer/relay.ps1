@@ -145,13 +145,13 @@ function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotP
     [IO.File]::WriteAllText($killPath, ($kill -join [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
     [void]$process.WaitForExit(5000)
   }
-  if($timedOut -and ($killExitCode -ne 0 -or -not $process.HasExited)){
+  $remaining = @(); if($timedOut){$remaining=@(Get-RemainingProcessIds $treeIds)}
+  if($timedOut -and ($killExitCode -ne 0 -or -not $process.HasExited -or $remaining.Count -gt 0)){
     [IO.File]::WriteAllText($stdoutPath,'[stdout unavailable: timed-out process did not close its stream]',[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,'[stderr unavailable: timed-out process did not close its stream]',[Text.UTF8Encoding]::new($false))
     throw "Codex timeout; taskkill exit=$killExitCode and parent process did not exit within the bounded wait. Logs were saved."
   }
   $stdout = $outTask.GetAwaiter().GetResult(); $stderr = $errTask.GetAwaiter().GetResult(); [IO.File]::WriteAllText($stdoutPath,$stdout,[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,$stderr,[Text.UTF8Encoding]::new($false))
   if($timedOut){
-    $remaining = @(Get-RemainingProcessIds $treeIds)
     if($killExitCode -ne 0){throw "Codex timeout; taskkill failed (exit $killExitCode). stdout, stderr, and taskkill logs were saved."}
     if(-not $process.HasExited -or $remaining.Count -gt 0){throw "Codex timeout; remaining process IDs: $($remaining -join ', '). stdout, stderr, and taskkill logs were saved."}
     throw "Codex timed out after $($Config.timeoutMinutes) minutes; process tree IDs $($treeIds -join ', ') terminated and logs were saved."
