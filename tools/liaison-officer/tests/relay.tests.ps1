@@ -54,7 +54,7 @@ try {
     Assert-Throws { Test-WorkerResult $config 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$mismatch}) } 'does not match'
     Remove-Item (Join-Path $repo 'allowed.txt')
   }
-  Invoke-Case 'protected normal rename and copy targets are rejected' {
+  Invoke-Case 'protected path writes are rejected' {
     foreach($path in @('index.html','README.md','.github\workflows\x.yml','archive\codex-sites-deployment\x.txt')) { $dir=Split-Path -Parent (Join-Path $repo $path); if($dir){New-Item -ItemType Directory -Force -Path $dir|Out-Null}; 'x'|Set-Content -NoNewline (Join-Path $repo $path); $report='LIAISON_REPORT_BEGIN {"status":"success","summary":"x","changedFiles":["'+($path -replace '\\','/')+'"],"tests":[],"unresolved":[],"humanReview":true} LIAISON_REPORT_END'; Assert-Throws {Test-WorkerResult $config 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$report})} 'Protected path changed'; & $git -C $repo clean -fdq }
   }
   Invoke-Case 'runtime and config artifacts never become changed paths or staged paths' {
@@ -74,7 +74,7 @@ Write-Output "child=$($child.Id)"; Write-Error 'fake stderr'; Start-Sleep -Secon
     foreach($file in @('codex.stdout.log','codex.stderr.log','taskkill.log')){if(-not(Test-Path (Join-Path $run $file))){throw "Missing timeout log $file"}}
     $childLine=Get-Content -Raw (Join-Path $run 'codex.stdout.log'); if($childLine -match 'child=(\d+)'){if(Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue){throw 'Fake worker child remains after timeout.'}}
   }
-  Invoke-Case 'existing state and runtime directories survive SelfTest cleanup policy' {
+  Invoke-Case 'existing state fixture remains available for SelfTest coverage' {
     $oldState=Join-Path $config.StatePath 'kept.txt'; New-Item -ItemType Directory -Force -Path $config.StatePath|Out-Null; 'keep'|Set-Content $oldState; if(-not(Test-Path $oldState)){throw 'Existing state fixture missing.'}
   }
   $reportPath=Join-Path $sandbox 'relay-test-results.json'; $results | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 $reportPath

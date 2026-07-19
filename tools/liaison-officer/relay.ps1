@@ -145,6 +145,10 @@ function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotP
     [IO.File]::WriteAllText($killPath, ($kill -join [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
     [void]$process.WaitForExit(5000)
   }
+  if($timedOut -and ($killExitCode -ne 0 -or -not $process.HasExited)){
+    [IO.File]::WriteAllText($stdoutPath,'[stdout unavailable: timed-out process did not close its stream]',[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,'[stderr unavailable: timed-out process did not close its stream]',[Text.UTF8Encoding]::new($false))
+    throw "Codex timeout; taskkill exit=$killExitCode and parent process did not exit within the bounded wait. Logs were saved."
+  }
   $stdout = $outTask.GetAwaiter().GetResult(); $stderr = $errTask.GetAwaiter().GetResult(); [IO.File]::WriteAllText($stdoutPath,$stdout,[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,$stderr,[Text.UTF8Encoding]::new($false))
   if($timedOut){
     $remaining = @(Get-RemainingProcessIds $treeIds)
