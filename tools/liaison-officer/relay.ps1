@@ -49,7 +49,8 @@ function Test-RepositoryPreflight($Config, [bool]$FetchOrigin = $true) {
   $status = Get-GitValue $Config @('status','--porcelain')
   if ($status) { throw 'Worktree is not clean.' }
   $origin = Get-GitValue $Config @('remote','get-url','origin')
-  if ($origin -notmatch [regex]::Escape($Config.repository)) { throw "origin does not match configured repository: $origin" }
+  $normalizedOrigin = $origin -replace '\\','/' -replace '\.git$','' -replace '^git@github\.com:','https://github.com/'
+  if ($normalizedOrigin -ne "https://github.com/$($Config.repository)") { throw "origin does not exactly match configured repository: $origin" }
   if ($FetchOrigin) {
     $fetch = Invoke-Tool $Config.GitPath @('fetch','origin',$Config.baseBranch) $Config.RepoPath
     if ($fetch.ExitCode -ne 0) { throw "origin/$($Config.baseBranch) could not be fetched." }
@@ -114,8 +115,10 @@ function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotP
   $process = New-Object System.Diagnostics.Process; $process.StartInfo = $info
   if (-not $process.Start()) { throw 'Codex process did not start.' }
   $process.StandardInput.Write($prompt); $process.StandardInput.Close(); $outTask = $process.StandardOutput.ReadToEndAsync(); $errTask = $process.StandardError.ReadToEndAsync()
-  if (-not $process.WaitForExit([int]$Config.timeoutMinutes * 60000)) { & taskkill.exe /PID $process.Id /T /F | Out-Null; throw "Codex timed out after $($Config.timeoutMinutes) minutes." }
+  $timedOut = -not $process.WaitForExit([int]$Config.timeoutMinutes * 60000)
+  if ($timedOut) { $script:CurrentStage='codex-timeout'; $kill=& taskkill.exe /PID $process.Id /T /F 2>&1; if($LASTEXITCODE -ne 0){throw "Codex timeout; process-tree termination failed: $($kill -join ' ')"}; $process.WaitForExit(); if(-not $process.HasExited){throw 'Codex timeout; orphan process remains.'} }
   $stdout = $outTask.GetAwaiter().GetResult(); $stderr = $errTask.GetAwaiter().GetResult(); [IO.File]::WriteAllText($stdoutPath,$stdout,[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,$stderr,[Text.UTF8Encoding]::new($false))
+  if($timedOut){throw "Codex timed out after $($Config.timeoutMinutes) minutes; stdout and stderr were saved."}
   return [pscustomobject]@{ ExitCode = $process.ExitCode; StdoutPath = $stdoutPath; StderrPath = $stderrPath; Stdout = $stdout }
 }
 function Get-ChangedPaths($Config) {
@@ -128,15 +131,15 @@ function Get-ChangedPaths($Config) {
   return @($paths | Sort-Object -Unique)
 }
 function Test-WorkerResult($Config, [string]$StartBranch, [string]$StartHead, $Worker) {
-  if ($Worker.ExitCode -ne 0) { throw "Codex exit code: $($Worker.ExitCode)" }
+  if ($Worker.ExitCode -ne 0) { $script:CurrentStage='codex-exit'; throw "Codex exit code: $($Worker.ExitCode)" }
   if ((Get-GitValue $Config @('branch','--show-current')) -ne $StartBranch) { throw 'Codex changed branch.' }
   if ((Get-GitValue $Config @('rev-parse','HEAD')) -ne $StartHead) { throw 'Codex changed HEAD or committed.' }
   $paths = Get-ChangedPaths $Config; if ($paths.Count -eq 0) { throw 'Codex produced no changes.' }
   $check = Invoke-Tool $Config.GitPath @('diff','--check') $Config.RepoPath; if ($check.ExitCode -ne 0) { throw 'git diff --check failed.' }
   foreach ($path in $paths) { foreach ($pattern in $Config.protectedPaths) { $prefix = $pattern.TrimEnd('*'); if ($path -like $pattern -or ($prefix -and $path.StartsWith($prefix))) { throw "Protected path changed: $path" } } }
   $match = [regex]::Match($Worker.Stdout,'LIAISON_REPORT_BEGIN\s*(\{[\s\S]*?\})\s*LIAISON_REPORT_END')
-  if (-not $match.Success) { throw 'Codex final report sentinel is missing.' }
-  try { $report = $match.Groups[1].Value | ConvertFrom-Json } catch { throw 'Codex final report JSON is invalid.' }
+  if (-not $match.Success) { $script:CurrentStage='report-parse'; throw 'Codex final report sentinel is missing.' }
+  try { $report = $match.Groups[1].Value | ConvertFrom-Json } catch { $script:CurrentStage='report-parse'; throw 'Codex final report JSON is invalid.' }
   foreach ($key in @('status','summary','changedFiles','tests','unresolved','humanReview')) { if ($null -eq $report.$key) { throw "Codex report key is missing: $key" } }
   if ($report.status -ne 'success') { throw "Codex report status is not success: $($report.status)" }
   $reported = @($report.changedFiles | ForEach-Object { Normalize-PathValue $_ } | Sort-Object); $actual = @($paths | Sort-Object)
@@ -146,6 +149,11 @@ function Test-WorkerResult($Config, [string]$StartBranch, [string]$StartHead, $W
 function Set-IssueLabels($Config, [int]$IssueNumber, [string[]]$Add, [string[]]$Remove) {
   foreach ($label in $Add) { $r = Invoke-Tool $Config.GhPath @('issue','edit',[string]$IssueNumber,'--repo',$Config.repository,'--add-label',$label) $Config.RepoPath; if ($r.ExitCode -ne 0) { throw "Could not add label $label" } }
   foreach ($label in $Remove) { $r = Invoke-Tool $Config.GhPath @('issue','edit',[string]$IssueNumber,'--repo',$Config.repository,'--remove-label',$label) $Config.RepoPath; if ($r.ExitCode -ne 0) { throw "Could not remove label $label" } }
+  $verify = Invoke-Tool $Config.GhPath @('issue','view',[string]$IssueNumber,'--repo',$Config.repository,'--json','labels') $Config.RepoPath
+  if($verify.ExitCode -ne 0){throw 'Issue labels could not be re-read after update.'}
+  $names=@((($verify.Output -join "`n")|ConvertFrom-Json).labels|ForEach-Object{$_.name})
+  foreach($label in $Add){if($label -notin $names){throw "Added label was not confirmed: $label"}}
+  foreach($label in $Remove){if($label -in $names){throw "Removed label was not confirmed: $label"}}
 }
 function Complete-Failure($Config, [string]$Message) {
   if(-not $script:SelectedIssue){return}
@@ -178,20 +186,20 @@ function Invoke-Once($Config) {
   $script:CurrentStage = 'lock'
   Acquire-LocalLock $Config $issue.number
   try {
-    $script:CurrentStage = 'branch'; foreach($ref in @("refs/heads/$branch","refs/remotes/origin/$branch")){ $probe=Invoke-Tool $Config.GitPath @('show-ref','--verify','--quiet',$ref) $Config.RepoPath; if($probe.ExitCode -eq 0){throw "Initial execution is blocked by existing branch: $ref"} }
-    $exists = Invoke-Tool $Config.GhPath @('pr','list','--repo',$Config.repository,'--state','open','--head',$branch,'--json','number') $Config.RepoPath
-    if ($exists.ExitCode -ne 0 -or ((($exists.Output -join "`n") | ConvertFrom-Json).Count -gt 0)) { throw "Initial execution is blocked by an existing Open PR or lookup failure for $branch." }
+    $script:CurrentStage = 'branch'; $openResult=Invoke-Tool $Config.GhPath @('pr','list','--repo',$Config.repository,'--state','open','--json','number,headRefName,body,createdAt') $Config.RepoPath; if($openResult.ExitCode -ne 0){throw 'Open PR lookup failed.'}; $open=@((($openResult.Output -join "`n")|ConvertFrom-Json)); $issuePr=@($open|Where-Object{$_.body -match "#$($issue.number)"}); $headPr=@($open|Where-Object{$_.headRefName -eq $branch}); $localRef=Invoke-Tool $Config.GitPath @('show-ref','--verify','--quiet',"refs/heads/$branch") $Config.RepoPath; $remoteRef=Invoke-Tool $Config.GitPath @('show-ref','--verify','--quiet',"refs/remotes/origin/$branch") $Config.RepoPath
+    $isRework=$false; if($issuePr.Count -eq 1 -and $headPr.Count -eq 1 -and $issuePr[0].number -eq $headPr[0].number -and $issuePr[0].body -match 'Liaison run ID:' -and $localRef.ExitCode -eq 0 -and $remoteRef.ExitCode -eq 0){$isRework=$true}
+    if(-not $isRework -and ($localRef.ExitCode -eq 0 -or $remoteRef.ExitCode -eq 0 -or $headPr.Count -gt 0 -or $issuePr.Count -gt 0)){throw 'Initial execution is blocked by an existing local branch, remote branch, matching-head PR, or Issue-referencing Open PR.'}
     $script:CurrentStage = 'github-state'; Set-IssueLabels $Config $issue.number @('codex-running') @(); $confirmed = Invoke-Tool $Config.GhPath @('issue','view',[string]$issue.number,'--repo',$Config.repository,'--json','labels') $Config.RepoPath
     if ($confirmed.ExitCode -ne 0 -or 'codex-running' -notin @((($confirmed.Output -join "`n") | ConvertFrom-Json).labels | ForEach-Object { $_.name })) { throw 'codex-running label was not confirmed.' }
     Set-IssueLabels $Config $issue.number @() @('ready-for-codex')
     $script:CurrentStage = 'issue-snapshot'; $runDirectory = Join-Path $Config.LogPath $RunId; New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
     $snapshot = Save-IssueSnapshot $Config $issue $runDirectory
-    $script:CurrentStage = 'branch'; $create = Invoke-Tool $Config.GitPath @('checkout','-b',$branch,"origin/$($Config.baseBranch)") $Config.RepoPath; if ($create.ExitCode -ne 0) { throw "Branch creation failed: $($create.Output -join ' ')" }
+    $script:CurrentStage = 'branch'; $createArgs=if($isRework){@('checkout',$branch)}else{@('checkout','-b',$branch,"origin/$($Config.baseBranch)")}; $create = Invoke-Tool $Config.GitPath $createArgs $Config.RepoPath; if ($create.ExitCode -ne 0) { throw "Branch preparation failed: $($create.Output -join ' ')" }
     $script:CurrentStage = 'codex-start'; $worker = Invoke-CodexWorker $Config $issue $branch $snapshot $runDirectory; $script:CurrentStage = 'validation'; $report = Test-WorkerResult $Config $branch $preflight.Head $worker
     $script:CurrentStage = 'commit'; $commit = Invoke-Tool $Config.GitPath @('add','--all') $Config.RepoPath; if ($commit.ExitCode -ne 0) { throw 'git add failed.' }; $commit = Invoke-Tool $Config.GitPath @('commit','-m',"issue #$($issue.number): liaison officer change") $Config.RepoPath; if ($commit.ExitCode -ne 0) { throw 'git commit failed.' }
     $script:CurrentStage = 'push'; $head = Get-GitValue $Config @('rev-parse','HEAD'); $push = Invoke-Tool $Config.GitPath @('push','-u','origin',$branch) $Config.RepoPath; if ($push.ExitCode -ne 0) { throw 'git push failed.' }
     $body = "Closes #$($issue.number)`n`nLiaison run ID: $RunId`nInitial execution: yes`nBase SHA: $($preflight.Head)`nHead SHA: $head`n`nCodex report: $($report.summary)`n`nAutomated checks: passed`nUnperformed: human review and public verification`nLocal log ID: $RunId"
-    $script:CurrentStage = 'pull-request'; $bodyPath = Join-Path $runDirectory 'pr-body.md'; [IO.File]::WriteAllText($bodyPath,$body,[Text.UTF8Encoding]::new($false)); $pr = Invoke-Tool $Config.GhPath @('pr','create','--repo',$Config.repository,'--base',$Config.baseBranch,'--head',$branch,'--title',"issue #$($issue.number): liaison officer change",'--body-file',$bodyPath) $Config.RepoPath; if ($pr.ExitCode -ne 0) { throw 'PR creation failed.' }
+    $script:CurrentStage = 'pull-request'; $bodyPath = Join-Path $runDirectory 'pr-body.md'; [IO.File]::WriteAllText($bodyPath,$body,[Text.UTF8Encoding]::new($false)); if($isRework){$pr=[pscustomobject]@{Output=@($issuePr[0].number)}; $update=Invoke-Tool $Config.GhPath @('pr','comment',[string]$issuePr[0].number,'--repo',$Config.repository,'--body',"Liaison run $RunId rework completed.") $Config.RepoPath; if($update.ExitCode -ne 0){throw 'Existing PR update comment failed.'}}else{$pr = Invoke-Tool $Config.GhPath @('pr','create','--repo',$Config.repository,'--base',$Config.baseBranch,'--head',$branch,'--title',"issue #$($issue.number): liaison officer change",'--body-file',$bodyPath) $Config.RepoPath; if ($pr.ExitCode -ne 0) { throw 'PR creation failed.' }}
     $script:CurrentStage = 'cleanup'; $returnMain = Invoke-Tool $Config.GitPath @('checkout',$Config.baseBranch) $Config.RepoPath; if ($returnMain.ExitCode -ne 0) { throw 'Could not return local repository to the base branch.' }
     if ((Get-GitValue $Config @('status','--porcelain'))) { throw 'Worktree is not clean after successful execution.' }
     $script:CurrentStage = 'github-state'; Set-IssueLabels $Config $issue.number @('awaiting-gm-review') @('codex-running','ready-for-codex','codex-failed'); $successComment=Invoke-Tool $Config.GhPath @('issue','comment',[string]$issue.number,'--repo',$Config.repository,'--body',"Liaison run $RunId completed. PR: $($pr.Output -join '')") $Config.RepoPath; if($successComment.ExitCode -ne 0){throw 'Success comment failed.'}; Write-Result "Completed Issue #$($issue.number)."
