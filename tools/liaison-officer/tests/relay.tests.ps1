@@ -40,14 +40,18 @@ try {
   Invoke-Case 'worker report and state violations are rejected' {
     $cases=@(
       @{name='nonzero'; worker=[pscustomobject]@{ExitCode=9;Stdout=''}; expect='Codex exit code'},
-      @{name='missing-sentinel'; worker=[pscustomobject]@{ExitCode=0;Stdout='no report'}; expect='no changes'},
-      @{name='bad-json'; worker=[pscustomobject]@{ExitCode=0;Stdout='LIAISON_REPORT_BEGIN {bad} LIAISON_REPORT_END'}; expect='no changes'}
+      @{name='missing-sentinel'; worker=[pscustomobject]@{ExitCode=0;Stdout='no report'}; expect='sentinel is missing'},
+      @{name='bad-json'; worker=[pscustomobject]@{ExitCode=0;Stdout='LIAISON_REPORT_BEGIN {bad} LIAISON_REPORT_END'}; expect='JSON is invalid'}
     )
-    foreach($case in $cases){Assert-Throws { Test-WorkerResult $config 'main' $base $case.worker } $case.expect}
+    foreach($case in $cases){ 'x'|Set-Content -NoNewline (Join-Path $repo 'allowed.txt'); Assert-Throws { Test-WorkerResult $config 'main' $base $case.worker } $case.expect; Remove-Item (Join-Path $repo 'allowed.txt') }
     'x'|Set-Content -NoNewline (Join-Path $repo 'allowed.txt')
     Assert-Throws { Test-WorkerResult $config 'other' $base ([pscustomobject]@{ExitCode=0;Stdout='x'}) } 'Codex changed branch'
     $bad='LIAISON_REPORT_BEGIN {"status":"failed","summary":"x","changedFiles":["allowed.txt"],"tests":[],"unresolved":[],"humanReview":true} LIAISON_REPORT_END'
     Assert-Throws { Test-WorkerResult $config 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$bad}) } 'not success'
+    $missing='LIAISON_REPORT_BEGIN {"status":"success","summary":"x","changedFiles":["allowed.txt"],"tests":[],"unresolved":[]} LIAISON_REPORT_END'
+    Assert-Throws { Test-WorkerResult $config 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$missing}) } 'key is missing'
+    $mismatch='LIAISON_REPORT_BEGIN {"status":"success","summary":"x","changedFiles":["other.txt"],"tests":[],"unresolved":[],"humanReview":true} LIAISON_REPORT_END'
+    Assert-Throws { Test-WorkerResult $config 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$mismatch}) } 'does not match'
     Remove-Item (Join-Path $repo 'allowed.txt')
   }
   Invoke-Case 'protected normal rename and copy targets are rejected' {

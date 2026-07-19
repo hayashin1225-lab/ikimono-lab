@@ -173,7 +173,7 @@ function Test-WorkerResult($Config, [string]$StartBranch, [string]$StartHead, $W
   $match = [regex]::Match($Worker.Stdout,'LIAISON_REPORT_BEGIN\s*(\{[\s\S]*?\})\s*LIAISON_REPORT_END')
   if (-not $match.Success) { $script:CurrentStage='report-parse'; throw 'Codex final report sentinel is missing.' }
   try { $report = $match.Groups[1].Value | ConvertFrom-Json } catch { $script:CurrentStage='report-parse'; throw 'Codex final report JSON is invalid.' }
-  foreach ($key in @('status','summary','changedFiles','tests','unresolved','humanReview')) { if ($null -eq $report.$key) { throw "Codex report key is missing: $key" } }
+  foreach ($key in @('status','summary','changedFiles','tests','unresolved','humanReview')) { if ($null -eq $report.PSObject.Properties[$key] -or $null -eq $report.PSObject.Properties[$key].Value) { throw "Codex report key is missing: $key" } }
   if ($report.status -ne 'success') { throw "Codex report status is not success: $($report.status)" }
   $reported = @($report.changedFiles | ForEach-Object { Normalize-PathValue $_ } | Sort-Object); $actual = @($paths | Sort-Object)
   if (@(Compare-Object $reported $actual).Count -ne 0) { throw 'Codex report changedFiles does not match actual changes.' }
