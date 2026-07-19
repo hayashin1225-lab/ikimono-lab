@@ -29,6 +29,22 @@ try {
   $config=[pscustomobject]@{RepoPath=$repo; GitPath=$git; GhPath='fake'; CodexPath='fake'; baseBranch='main'; protectedPaths=@('index.html','README.md','.github/workflows/*','archive/codex-sites-deployment*'); timeoutMinutes=1; LogPath=(Join-Path $runtime 'logs'); StatePath=(Join-Path $runtime 'state'); TempPath=(Join-Path $runtime 'temp')}
   $env:LIAISON_OFFICER_IMPORT='1'; . $relay; Remove-Item Env:\LIAISON_OFFICER_IMPORT
   $base=Get-GitValue $config @('rev-parse','HEAD')
+  Invoke-Case 'SelfTest executes against fake GitHub and Codex CLIs without removing existing state' {
+    & $git -C $repo update-ref refs/remotes/origin/main HEAD
+    $fakeGh=Join-Path $sandbox 'fake-gh.cmd'; $fakeCodex=Join-Path $sandbox 'fake-codex.cmd'
+    @'
+@echo off
+if "%1"=="auth" echo authenticated& exit /b 0
+if "%1"=="api" echo {"login":"owner"}& exit /b 0
+if "%1"=="repo" echo {"nameWithOwner":"owner/repo"}& exit /b 0
+if "%1"=="label" echo [{"name":"gm-approved"},{"name":"ready-for-codex"},{"name":"codex-running"},{"name":"awaiting-gm-review"},{"name":"codex-failed"}]& exit /b 0
+exit /b 1
+'@ | Set-Content -Encoding ASCII $fakeGh
+    "@echo off`r`necho fake codex`r`nexit /b 0" | Set-Content -Encoding ASCII $fakeCodex
+    $stateFile=Join-Path $config.StatePath 'keep.txt'; New-Item -ItemType Directory -Force -Path $config.StatePath|Out-Null; 'keep'|Set-Content $stateFile
+    $self=[pscustomobject]@{RepoPath=$repo;GitPath=$git;GhPath=$fakeGh;CodexPath=$fakeCodex;repository='owner/repo';baseBranch='main';codexSubcommand='exec';LogPath=$config.LogPath;StatePath=$config.StatePath;TempPath=$config.TempPath;requiredLabels=@('gm-approved','ready-for-codex','codex-running','awaiting-gm-review','codex-failed')}
+    Test-SelfTest $self; if(-not(Test-Path $stateFile)){throw 'SelfTest removed existing state.'}
+  }
 
   Invoke-Case 'worker legal change is verified and only verified path is stageable' {
     'ok' | Set-Content -NoNewline (Join-Path $repo 'allowed.txt')
