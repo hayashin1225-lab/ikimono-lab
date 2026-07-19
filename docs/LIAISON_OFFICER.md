@@ -16,7 +16,7 @@
 
 ローカルではFileStreamを`FileShare.None`で保持する。GitHubでは`codex-running`を追加・再取得して確認してから`ready-for-codex`を外す。ロックや状態が古く見えても自動削除・自動復旧しない。PID、開始時刻、実行IDを報告して安全停止する。
 
-成功時は実行状態ラベルを整理し、`awaiting-gm-review`を付け、`gm-approved`を保持する。失敗時は可能な範囲で実行中ラベルを外し、`codex-failed`を付ける。ラベル自体は自動作成しない。
+成功時はcommit、push、PR作成または更新、base branchへの復帰、clean worktree・HEAD確認を終えてから実行状態ラベルを整理し、`awaiting-gm-review`を付け、`gm-approved`を保持する。失敗時は可能な範囲で実行中ラベルを外し、`codex-failed`を付け、実行ID・失敗段階・要約だけをIssueへ記録する。ラベル自体は自動作成しない。
 
 ## Codex実行と検査
 

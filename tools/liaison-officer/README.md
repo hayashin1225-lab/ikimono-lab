@@ -20,7 +20,7 @@
 4. `gh auth status --hostname github.com`で既存認証を確認する。
 5. SelfTestを実行する。
 
-`config.local.json`はGit管理されない。`.runtime/`以下のログ、状態、テンポラリもローカル専用である。
+`config.local.json`はGit管理されない。既定のログ、状態、テンポラリは `tools/liaison-officer/.runtime/` 以下に保存され、同じディレクトリのignore規則でGit管理対象外となる。
 
 ## 必須ラベル
 
