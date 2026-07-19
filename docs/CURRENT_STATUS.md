@@ -23,6 +23,8 @@
 - iPhone固定バー巨大化修正
 - Figma対応共有基盤の文書・テンプレートを整備した
 - Figmaファイルと最初のGUI試行Issueは未作成
+- AIオーケストレーション.runtimeの連絡将校MVPを追加した
+- 連絡将校MVPの初回試行とScheduled Task登録は未実施
 
 ## 次の優先事項
 
@@ -40,3 +42,5 @@
 - [GUI現在状況](GUI_CURRENT_STATUS.md)
 - [アーキテクチャ](ARCHITECTURE.md)
 - [設計判断記録](DECISIONS.md)
+- [AIオーケストレーション.runtime](AI_ORCHESTRATION_RUNTIME.md)
+- [連絡将校MVP](LIAISON_OFFICER.md)

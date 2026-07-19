@@ -24,3 +24,19 @@
 関連CSSを将来変更する場合は、対象状態での回帰確認を行う。
 
 以後の判断はこの形式で追記する。
+
+## DEC-RUNTIME-001：連絡将校MVPによる実行統制
+
+- **日付：** 確認要
+- **状態：** 実装済み・初回試行未実施
+- **対象：** AIオーケストレーション.runtimeの連絡将校MVP
+- **問題：** 人間がChatGPTとCodexの間で、情報運搬、起動、状態確認、成果物回収を毎回担っていた。
+- **判断：** Windows PowerShellを用いた連絡将校MVPを追加し、承認済みIssue一件の実行統制を外在化する。
+- **理由：** 既存のWindows・Git・GitHub CLI・Codex CLIと整合し、外部PowerShellモジュールなしでログ、排他、プロセス、GitHub状態を扱えるため。
+- **代替案：** GitHub Actions、常駐アプリ、複数AIアダプター、分散ロックは、権限・運用・失敗復旧の検証前には採用しない。
+- **実装：** GitHubラベル起点、ローカルFileStream lock、固定Issueスナップショット、Codex Worker、差分検査、連絡将校によるcommit・push・PR作成を分離する。
+- **検証結果：** PowerShell構文、JSON、ignore、SelfTest、DryRun、プロセスランナーを確認対象とする。初回実Issue試行とScheduled登録は未実施である。
+- **得られた原則：** 意味判断は人間とChatGPTへ残し、CodexのGit・GitHub操作を実行統制から分離する。一回に一件だけ処理し、自動マージ・自動公開・自動再試行を導入しない。
+- **関連Issue：** Issue #13
+- **関連PR：** 確認要
+- **Figma参照：** 該当なし
