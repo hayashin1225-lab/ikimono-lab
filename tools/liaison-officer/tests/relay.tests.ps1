@@ -57,8 +57,18 @@ try {
   Invoke-Case 'protected path writes are rejected' {
     foreach($path in @('index.html','README.md','.github\workflows\x.yml','archive\codex-sites-deployment\x.txt')) { $dir=Split-Path -Parent (Join-Path $repo $path); if($dir){New-Item -ItemType Directory -Force -Path $dir|Out-Null}; 'x'|Set-Content -NoNewline (Join-Path $repo $path); $report='LIAISON_REPORT_BEGIN {"status":"success","summary":"x","changedFiles":["'+($path -replace '\\','/')+'"],"tests":[],"unresolved":[],"humanReview":true} LIAISON_REPORT_END'; Assert-Throws {Test-WorkerResult $config 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$report})} 'Protected path changed'; & $git -C $repo clean -fdq }
   }
+  Invoke-Case 'git rename and copy into protected paths are rejected' {
+    'source'|Set-Content -NoNewline (Join-Path $repo 'source.txt'); & $git -C $repo add source.txt; & $git -C $repo commit -qm source
+    $head=Get-GitValue $config @('rev-parse','HEAD'); & $git -C $repo mv source.txt index.html
+    $renameReport='LIAISON_REPORT_BEGIN {"status":"success","summary":"x","changedFiles":["index.html"],"tests":[],"unresolved":[],"humanReview":true} LIAISON_REPORT_END'
+    Assert-Throws { Test-WorkerResult $config 'main' $head ([pscustomobject]@{ExitCode=0;Stdout=$renameReport}) } 'Protected path changed'
+    & $git -C $repo reset --hard -q $head; Copy-Item (Join-Path $repo 'source.txt') (Join-Path $repo 'README.md')
+    $copyReport='LIAISON_REPORT_BEGIN {"status":"success","summary":"x","changedFiles":["README.md"],"tests":[],"unresolved":[],"humanReview":true} LIAISON_REPORT_END'
+    Assert-Throws { Test-WorkerResult $config 'main' $head ([pscustomobject]@{ExitCode=0;Stdout=$copyReport}) } 'Protected path changed'
+    & $git -C $repo reset --hard -q $head
+  }
   Invoke-Case 'runtime and config artifacts never become changed paths or staged paths' {
-    New-Item -ItemType Directory -Force -Path $config.LogPath,$config.StatePath,$config.TempPath|Out-Null; 'log'|Set-Content (Join-Path $config.LogPath 'x.log'); '{}'|Set-Content (Join-Path $repo 'config.local.json'); if(@(Get-ChangedPaths $config).Count){throw 'Ignored runtime artifact appeared in changed paths.'}; & $git -C $repo add -- .; if((& $git -C $repo diff --cached --name-only)){throw 'Ignored runtime artifact was staged.'}; & $git -C $repo reset -q
+    & $git -C $repo reset --hard -q; & $git -C $repo clean -fdq; New-Item -ItemType Directory -Force -Path $config.LogPath,$config.StatePath,$config.TempPath|Out-Null; 'log'|Set-Content (Join-Path $config.LogPath 'x.log'); '{}'|Set-Content (Join-Path $repo 'config.local.json'); if(@(Get-ChangedPaths $config).Count){throw 'Ignored runtime artifact appeared in changed paths.'}; & $git -C $repo add -- .; if((& $git -C $repo diff --cached --name-only)){throw 'Ignored runtime artifact was staged.'}; & $git -C $repo reset -q
   }
   Invoke-Case 'post-verification untested file is not included in exact staging set' {
     'verified'|Set-Content -NoNewline (Join-Path $repo 'allowed.txt'); $verified=@(Get-ChangedPaths $config); 'intruder'|Set-Content -NoNewline (Join-Path $repo 'intruder.txt'); & $git -C $repo add -- $verified; $staged=@(& $git -C $repo diff --cached --name-only); if($staged -contains 'intruder.txt'){throw 'Untested file was staged.'}; if(@(Compare-Object $verified $staged).Count){throw 'Verified staging set changed.'}; & $git -C $repo reset -q; Remove-Item (Join-Path $repo 'allowed.txt'),(Join-Path $repo 'intruder.txt')
