@@ -1,0 +1,18 @@
+{
+  "repository": "hayashin1225-lab/ikimono-lab",
+  "repoPath": "C:\\path\\to\\ikimono-lab",
+  "baseBranch": "main",
+  "timeoutMinutes": 30,
+  "logDirectory": "tools/liaison-officer/.runtime/logs",
+  "stateDirectory": "tools/liaison-officer/.runtime/state",
+  "temporaryDirectory": "tools/liaison-officer/.runtime/temp",
+  "taskIntervalMinutes": 5,
+  "requiredLabels": ["gm-approved", "ready-for-codex", "codex-running", "awaiting-gm-review", "codex-failed"],
+  "stateLabels": ["ready-for-codex", "codex-running", "awaiting-gm-review", "codex-failed"],
+  "protectedPaths": [".github/workflows/**", "archive/codex-sites-deployment/**", "tools/liaison-officer/config.local.json", ".git/**"],
+  "gitExecutable": "git",
+  "ghExecutable": "gh",
+  "codexExecutable": "codex",
+  "codexSubcommand": "exec",
+  "codexArguments": ["-s", "workspace-write"]
+}
