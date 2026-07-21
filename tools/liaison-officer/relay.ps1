@@ -16,7 +16,7 @@ $script:CurrentStage = 'preflight'
 $script:SelectedIssue = $null
 
 function Write-Result([string]$Message) { Write-Output "[$RunId] $Message" }
-function Stop-WithCode([int]$Code, [string]$Message) { Write-Error "[$RunId] $Message"; exit $Code }
+function Stop-WithCode([int]$Code, [string]$Message) { Write-Error "[$RunId] $Message" -ErrorAction Continue; exit $Code }
 function Normalize-PathValue([string]$Path) { return $Path.Replace('\', '/') }
 function Get-Config {
   if (-not (Test-Path -LiteralPath $ConfigPath)) { Stop-WithCode $ExitCode.Configuration "Config file is missing: $ConfigPath" }
@@ -34,7 +34,16 @@ function Resolve-Executable([string]$Value, [string]$Name) {
 }
 function Invoke-Tool([string]$FileName, [string[]]$Arguments, [string]$WorkingDirectory) {
   $old = Get-Location
-  try { Set-Location -LiteralPath $WorkingDirectory; $output = & $FileName @Arguments 2>&1; $code = $LASTEXITCODE } finally { Set-Location -LiteralPath $old }
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    Set-Location -LiteralPath $WorkingDirectory
+    $ErrorActionPreference = 'Continue'
+    $output = & $FileName @Arguments 2>&1
+    $code = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+    Set-Location -LiteralPath $old
+  }
   return [pscustomobject]@{ ExitCode = $code; Output = @($output | ForEach-Object { $_.ToString() }) }
 }
 function Get-GitValue($Config, [string[]]$Arguments) {
@@ -50,7 +59,11 @@ function Test-RepositoryPreflight($Config, [bool]$FetchOrigin = $true) {
   if ($status) { throw 'Worktree is not clean.' }
   $origin = Get-GitValue $Config @('remote','get-url','origin')
   $normalizedOrigin = $origin -replace '\\','/' -replace '\.git$','' -replace '^git@github\.com:','https://github.com/'
-  if ($normalizedOrigin -ne "https://github.com/$($Config.repository)") { throw "origin does not exactly match configured repository: $origin" }
+  $expectedOrigin = "https://github.com/$($Config.repository)"
+  if ($Config.PSObject.Properties.Name -contains 'expectedOrigin' -and $Config.expectedOrigin) {
+    $expectedOrigin = ([string]$Config.expectedOrigin) -replace '\\','/' -replace '\.git$','' -replace '^git@github\.com:','https://github.com/'
+  }
+  if ($normalizedOrigin -ne $expectedOrigin) { throw "origin does not exactly match configured repository: $origin" }
   if ($FetchOrigin) {
     $fetch = Invoke-Tool $Config.GitPath @('fetch','origin',$Config.baseBranch) $Config.RepoPath
     if ($fetch.ExitCode -ne 0) { throw "origin/$($Config.baseBranch) could not be fetched." }
@@ -116,7 +129,61 @@ function Get-ProcessTreeIds([int]$RootProcessId) {
       try { $children = Get-CimInstance -ClassName Win32_Process -Filter "ParentProcessId=$parentId" -ErrorAction Stop } catch { $children = Get-WmiObject -Class Win32_Process -Filter "ParentProcessId=$parentId" -ErrorAction Stop }
       foreach ($child in @($children)) { $childId = [int]$child.ProcessId; if (-not $ids.Contains($childId)) { $ids.Add($childId); $pending.Enqueue($childId) } }
     }
-  } catch { Write-Result "Process-tree child discovery was unavailable: $($_.Exception.Message)" }
+  } catch {
+    try {
+      if (-not ('LiaisonOfficer.ProcessSnapshot' -as [type])) {
+        [void](Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+namespace LiaisonOfficer {
+  public static class ProcessSnapshot {
+    private const uint TH32CS_SNAPPROCESS = 0x00000002;
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct PROCESSENTRY32 {
+      public uint dwSize;
+      public uint cntUsage;
+      public uint th32ProcessID;
+      public IntPtr th32DefaultHeapID;
+      public uint th32ModuleID;
+      public uint cntThreads;
+      public uint th32ParentProcessID;
+      public int pcPriClassBase;
+      public uint dwFlags;
+      [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)] private static extern bool Process32First(IntPtr snapshot, ref PROCESSENTRY32 entry);
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)] private static extern bool Process32Next(IntPtr snapshot, ref PROCESSENTRY32 entry);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr handle);
+    public static Dictionary<int,int> GetParentMap() {
+      var result = new Dictionary<int,int>();
+      IntPtr snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+      if (snapshot == new IntPtr(-1)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+      try {
+        var entry = new PROCESSENTRY32();
+        entry.dwSize = (uint)Marshal.SizeOf(typeof(PROCESSENTRY32));
+        if (Process32First(snapshot, ref entry)) {
+          do { result[(int)entry.th32ProcessID] = (int)entry.th32ParentProcessID; } while (Process32Next(snapshot, ref entry));
+        }
+      } finally { CloseHandle(snapshot); }
+      return result;
+    }
+  }
+}
+'@)
+      }
+      $parentMap = [LiaisonOfficer.ProcessSnapshot]::GetParentMap()
+      $ids.Clear(); $pending.Clear(); $ids.Add($RootProcessId); $pending.Enqueue($RootProcessId)
+      while ($pending.Count -gt 0) {
+        $parentId = [int]$pending.Dequeue()
+        foreach ($entry in $parentMap.GetEnumerator()) {
+          if ([int]$entry.Value -eq $parentId) { $childId = [int]$entry.Key; if (-not $ids.Contains($childId)) { $ids.Add($childId); $pending.Enqueue($childId) } }
+        }
+      }
+    } catch { Write-Warning "Process-tree child discovery was unavailable: $($_.Exception.Message)" }
+  }
   return @($ids | Sort-Object -Unique)
 }
 function Get-RemainingProcessIds([int[]]$ProcessIds) {
@@ -134,27 +201,35 @@ function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotP
   $process.StandardInput.Write($prompt); $process.StandardInput.Close(); $outTask = $process.StandardOutput.ReadToEndAsync(); $errTask = $process.StandardError.ReadToEndAsync()
   Start-Sleep -Milliseconds 50
   $treeIds = @(Get-ProcessTreeIds $process.Id)
-  $timedOut = -not $process.WaitForExit([int]$Config.timeoutMinutes * 60000)
+  $timeoutMilliseconds = [int]([double]$Config.timeoutMinutes * 60000)
+  $timedOut = -not $process.WaitForExit($timeoutMilliseconds)
   $killPath = Join-Path $RunDirectory 'taskkill.log'
   $killExitCode = $null
+  $fallbackKill = @()
   if ($timedOut) {
     $script:CurrentStage='codex-timeout'
-    # cmd.exe keeps taskkill's diagnostic as captured output under PowerShell's Stop preference.
     $treeIds = @($treeIds + @(Get-ProcessTreeIds $process.Id) | Sort-Object -Unique)
-    $kill = & cmd.exe /d /c "taskkill.exe /PID $($process.Id) /T /F" 2>&1; $killExitCode = $LASTEXITCODE
-    [IO.File]::WriteAllText($killPath, ($kill -join [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $previousErrorActionPreference = $ErrorActionPreference
+    try { $ErrorActionPreference = 'Continue'; $kill = & cmd.exe /d /c "taskkill.exe /PID $($process.Id) /T /F" 2>&1; $killExitCode = $LASTEXITCODE } finally { $ErrorActionPreference = $previousErrorActionPreference }
+    if ($killExitCode -ne 0) {
+      foreach ($processId in @($treeIds | Sort-Object -Descending)) {
+        try { if (Get-Process -Id $processId -ErrorAction SilentlyContinue) { Stop-Process -Id $processId -Force -ErrorAction Stop; $fallbackKill += "Stop-Process terminated PID $processId" } } catch { $fallbackKill += "Stop-Process failed for PID $processId`: $($_.Exception.Message)" }
+      }
+    }
+    $killLogLines = @($kill) + @($fallbackKill)
+    [IO.File]::WriteAllText($killPath, ($killLogLines -join [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
     [void]$process.WaitForExit(5000)
   }
   $remaining = @(); if($timedOut){$remaining=@(Get-RemainingProcessIds $treeIds)}
-  if($timedOut -and ($killExitCode -ne 0 -or -not $process.HasExited -or $remaining.Count -gt 0)){
+  if($timedOut -and (-not $process.HasExited -or $remaining.Count -gt 0)){
     [IO.File]::WriteAllText($stdoutPath,'[stdout unavailable: timed-out process did not close its stream]',[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,'[stderr unavailable: timed-out process did not close its stream]',[Text.UTF8Encoding]::new($false))
-    throw "Codex timeout; taskkill exit=$killExitCode and parent process did not exit within the bounded wait. Logs were saved."
+    throw "Codex timeout; taskkill exit=$killExitCode and process IDs $($remaining -join ', ') remained after the bounded fallback. Logs were saved."
   }
   $stdout = $outTask.GetAwaiter().GetResult(); $stderr = $errTask.GetAwaiter().GetResult(); [IO.File]::WriteAllText($stdoutPath,$stdout,[Text.UTF8Encoding]::new($false)); [IO.File]::WriteAllText($stderrPath,$stderr,[Text.UTF8Encoding]::new($false))
   if($timedOut){
-    if($killExitCode -ne 0){throw "Codex timeout; taskkill failed (exit $killExitCode). stdout, stderr, and taskkill logs were saved."}
     if(-not $process.HasExited -or $remaining.Count -gt 0){throw "Codex timeout; remaining process IDs: $($remaining -join ', '). stdout, stderr, and taskkill logs were saved."}
-    throw "Codex timed out after $($Config.timeoutMinutes) minutes; process tree IDs $($treeIds -join ', ') terminated and logs were saved."
+    $fallbackNote=if($fallbackKill.Count){" taskkill exit=$killExitCode; PowerShell fallback was recorded."}else{''}
+    throw "Codex timed out after $($Config.timeoutMinutes) minutes; process tree IDs $($treeIds -join ', ') terminated and logs were saved.$fallbackNote"
   }
   return [pscustomobject]@{ ExitCode = $process.ExitCode; StdoutPath = $stdoutPath; StderrPath = $stderrPath; Stdout = $stdout; ProcessIds = $treeIds }
 }
@@ -194,6 +269,13 @@ function Set-IssueLabels($Config, [int]$IssueNumber, [string[]]$Add, [string[]]$
 }
 function Complete-Failure($Config, [string]$Message) {
   if(-not $script:SelectedIssue){return}
+  try {
+    $currentBranch = Get-GitValue $Config @('branch','--show-current')
+    if ($currentBranch -and $currentBranch -ne $Config.baseBranch) {
+      $returnBase = Invoke-Tool $Config.GitPath @('checkout',$Config.baseBranch) $Config.RepoPath
+      if ($returnBase.ExitCode -ne 0) { throw "Could not return to $($Config.baseBranch): $($returnBase.Output -join ' ')" }
+    }
+  } catch { Write-Error "[$RunId] failure branch cleanup also failed: $($_.Exception.Message)" }
   try { Set-IssueLabels $Config $script:SelectedIssue.number @('codex-failed') @('codex-running','ready-for-codex','awaiting-gm-review') } catch { Write-Error "[$RunId] failure label cleanup also failed: $($_.Exception.Message)" }
   try { $safe = ($Message -replace 'C:\\Users\\[^\\\s]+','[local-path]' -replace '(gho|github_pat)_[A-Za-z0-9_\-]+','[redacted]'); $comment = Invoke-Tool $Config.GhPath @('issue','comment',[string]$script:SelectedIssue.number,'--repo',$Config.repository,'--body',"Liaison run $RunId failed at $script:CurrentStage. $safe Human review is required.") $Config.RepoPath; if($comment.ExitCode -ne 0){throw 'Issue failure comment was rejected.'} } catch { Write-Error "[$RunId] failure comment also failed: $($_.Exception.Message)" }
 }
