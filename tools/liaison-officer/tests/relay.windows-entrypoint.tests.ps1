@@ -69,7 +69,7 @@ if errorlevel 1 (
   exit /b 64
 )
 echo OpenAI Codex vTEST 1>&2
-echo LIAISON_SMOKE_OK
+echo LIAISON_SMOKE_OK 1>&2
 exit /b 0
 '@ -replace "`n", "`r`n"
   [IO.File]::WriteAllText((Join-Path $temp 'fake-codex.cmd'), $fakeCodexCmd, [Text.Encoding]::ASCII)
@@ -167,15 +167,14 @@ function Complete-Failure($Config, [string]$Message) {}
 
   $self = Invoke-TestProcess @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $temp 'relay-windows.ps1'), '-Mode', 'SelfTest', '-RunCodexSmokeTest')
   if ($self.ExitCode -ne 0) { throw "SelfTest wrapper failed: $($self.Stdout) $($self.Stderr)" }
-  if ($self.Stdout -notmatch 'Codex smoke test passed') { throw "smoke success marker was absent: $($self.Stdout)" }
+  if ($self.Stdout -notmatch 'Codex smoke test passed') { throw "stderr smoke sentinel was not captured by the wrapper: $($self.Stdout)" }
   if ($self.Stdout -notmatch 'SelfTest completed') { throw 'SelfTest completion marker was absent' }
-  if ($self.Stdout -notmatch 'OpenAI Codex vTEST') { throw 'native Codex stderr banner was not captured without terminating the run' }
 
   $dry = Invoke-TestProcess @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $temp 'relay-windows.ps1'), '-Mode', 'DryRun')
   if ($dry.ExitCode -ne 0) { throw "DryRun wrapper failed: $($dry.Stdout) $($dry.Stderr)" }
   if ($dry.Stdout -notmatch '日本語の試運転') { throw "UTF-8 Japanese gh JSON was not preserved: $($dry.Stdout)" }
 
-  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: explicit native UTF-8 decoding, default config path, native gh JSON, native Codex stderr, non-Git smoke flag, README, and Scheduled Task routing.'
+  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: explicit native UTF-8 stdout/stderr decoding, default config path, native gh JSON, non-Git smoke flag, README, and Scheduled Task routing.'
 } finally {
   if ($null -eq $previousFakeGh) { Remove-Item Env:\FAKE_GH -ErrorAction SilentlyContinue } else { $env:FAKE_GH = $previousFakeGh }
   if ($null -eq $previousFakeCodex) { Remove-Item Env:\FAKE_CODEX -ErrorAction SilentlyContinue } else { $env:FAKE_CODEX = $previousFakeCodex }
