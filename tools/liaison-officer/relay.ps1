@@ -177,7 +177,7 @@ function Save-IssueSnapshot($Config, $Issue, [string]$RunDirectory) {
   if ($detail.ExitCode -ne 0) { throw "Issue snapshot failed: $($detail.Output -join ' ')" }
   $item = (($detail.Output -join "`n") | ConvertFrom-Json)
   $lines = @("# Issue #$($item.number): $($item.title)", '', "URL: $($item.url)", "Created: $($item.createdAt)", "Updated: $($item.updatedAt)", "Labels: $((@($item.labels | ForEach-Object { $_.name }) -join ', '))", '', '## Body', $item.body, '', '## Comments')
-  foreach ($comment in @($item.comments | Sort-Object createdAt)) { $lines += @('', "### $($comment.author.login) — $($comment.createdAt)", $comment.body) }
+  foreach ($comment in @($item.comments | Sort-Object createdAt)) { $lines += @('', "### $($comment.author.login) - $($comment.createdAt)", $comment.body) }
   $path = Join-Path $RunDirectory 'issue-snapshot.md'; [IO.File]::WriteAllText($path, ($lines -join "`r`n"), [Text.UTF8Encoding]::new($false)); return $path
 }
 function Quote-ProcessArgument([string]$Value) { if ($Value -notmatch '[\s"]') { return $Value }; return '"' + ($Value -replace '(\\*)"','$1$1\"' -replace '(\\*)$','$1$1') + '"' }
