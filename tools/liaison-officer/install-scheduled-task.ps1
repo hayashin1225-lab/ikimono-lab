@@ -1,13 +1,16 @@
 [CmdletBinding()]
 param(
-  [string]$ConfigPath = (Join-Path $PSScriptRoot 'config.local.json'),
+  [string]$ConfigPath = '',
   [string]$TaskName = 'IkimonoLab-LiaisonOfficer'
 )
 
 $ErrorActionPreference = 'Stop'
-$relayPath = Join-Path $PSScriptRoot 'relay.ps1'
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+  $ConfigPath = Join-Path $PSScriptRoot 'config.local.json'
+}
+$relayPath = Join-Path $PSScriptRoot 'relay-windows.ps1'
 if (-not (Test-Path -LiteralPath $ConfigPath)) { throw "config.local.json is required: $ConfigPath" }
-if (-not (Test-Path -LiteralPath $relayPath)) { throw "relay.ps1 is missing: $relayPath" }
+if (-not (Test-Path -LiteralPath $relayPath)) { throw "relay-windows.ps1 is missing: $relayPath" }
 
 & $relayPath -Mode SelfTest -ConfigPath $ConfigPath
 if ($LASTEXITCODE -ne 0) { throw 'SelfTest failed. The scheduled task was not registered.' }
