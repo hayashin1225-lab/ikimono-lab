@@ -55,7 +55,8 @@ function Invoke-Native([string]$File,[string[]]$Arguments,[string]$Directory) {
   return [pscustomobject]@{ExitCode=$code;Output=@($output|ForEach-Object{$_.ToString()})}
 }
 function Invoke-FakeGh($Gh,[string[]]$Arguments,[string]$Directory) {
-  return Invoke-Native $Gh.Launcher $Arguments $Directory
+  $processArguments = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Gh.Launcher) + @($Arguments)
+  return Invoke-Native $powerShell $processArguments $Directory
 }
 function Convert-OutputJson($Result) {
   return (($Result.Output -join "`n")|ConvertFrom-Json)
