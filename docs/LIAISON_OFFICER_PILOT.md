@@ -9,6 +9,6 @@
 3. Codexスモークテスト
 4. Once
 5. PR監査
-6. 同一PRでの再作業
+6. 人間承認後の同一PR再作業
 
 Scheduled Taskは今回登録しない。
