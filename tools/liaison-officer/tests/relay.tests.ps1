@@ -9,7 +9,7 @@ $relay = Join-Path $Root 'tools\liaison-officer\relay.ps1'
 $git = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $git) { $git = 'C:\Users\User\AppData\Local\GitHubDesktop\app-3.6.2\resources\app\git\mingw64\bin\git.exe' }
 $tokens=$null; $errors=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($relay,[ref]$tokens,[ref]$errors)
-if($errors.Count){throw ($errors|ForEach-Object Message -join '; ')}
+if($errors.Count){throw (($errors | ForEach-Object { $_.Message }) -join '; ')}
 $relayText=Get-Content -Raw -Encoding UTF8 -LiteralPath $relay
 foreach($property in @('StandardInputEncoding','StandardOutputEncoding','StandardErrorEncoding')){if($relayText-notmatch($property+'\s*=\s*\$utf8')){throw "Codex worker does not set $property to UTF-8."}}
 
