@@ -55,7 +55,8 @@ function Invoke-Native([string]$File,[string[]]$Arguments,[string]$Directory) {
   return [pscustomobject]@{ExitCode=$code;Output=@($output|ForEach-Object{$_.ToString()})}
 }
 function Invoke-FakeGh($Gh,[string[]]$Arguments,[string]$Directory) {
-  return Invoke-Native $Gh.Launcher $Arguments $Directory
+  $processArguments = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Gh.Launcher) + @($Arguments)
+  return Invoke-Native $powerShell $processArguments $Directory
 }
 function Convert-OutputJson($Result) {
   return (($Result.Output -join "`n")|ConvertFrom-Json)
@@ -259,6 +260,9 @@ function Assert-FailureState($State,[int]$IssueNumber) {
   foreach($name in @('ready-for-codex','codex-running','awaiting-gm-review')){Assert ($name-notin$names) "failure retained label $name"}
   $failureComments=@($State.comments|Where-Object{$_.targetType-eq'issue'-and[int]$_.number-eq$IssueNumber-and$_.body-match'failed at'})
   Assert ($failureComments.Count-gt0) 'failure comment was not persisted';Assert-Match $failureComments[-1].body 'Human review is required' 'failure comment format'
+  Assert-Match $failureComments[-1].body 'captured automatically; manual log relay is not required' 'automatic diagnosis notice'
+  Assert-Match $failureComments[-1].body 'Actual paths:' 'failure comment actual paths'
+  Assert-Match $failureComments[-1].body 'Cleanup: branchReturn=' 'failure comment cleanup result'
 }
 function Assert-FakeGhHistory($State,$Gh,[string]$StatePath) {
   foreach($call in @($State.ghCalls)){
@@ -358,6 +362,16 @@ function Test-InitialFailure([string]$Directory,[string]$Git,$Codex,[string]$Nam
   $state=Read-State $statePath;Assert-FailureState $state 42;Assert-Equal @($state.codexCalls).Count $ExpectedCodexCalls "$Name fake Codex call count";Assert-Equal @($state.prs).Count 0 "$Name unexpectedly persisted a PR"
   Assert-BaseState $Git $remote $ExpectedClean;Assert-Equal (Test-BareBranch $Git $remote $branch) $ExpectedRemoteBranch "$Name remote branch presence"
   Assert (-not(Test-Path -LiteralPath (Join-Path $remote.Repo 'tools\liaison-officer\.runtime\state\liaison.lock'))) "$Name retained local lock"
+  $diagnosisFiles=@(Get-ChildItem -LiteralPath (Join-Path $remote.Repo 'tools\liaison-officer\.runtime\logs') -Filter 'failure-diagnosis.json' -File -Recurse)
+  Assert-Equal $diagnosisFiles.Count 1 "$Name failure diagnosis count"
+  $diagnosis=[IO.File]::ReadAllText($diagnosisFiles[0].FullName,[Text.Encoding]::UTF8)|ConvertFrom-Json
+  Assert-Equal $diagnosis.issue 42 "$Name diagnosis issue"
+  Assert (-not[string]::IsNullOrWhiteSpace([string]$diagnosis.runId)) "$Name diagnosis omitted run ID"
+  Assert (-not[string]::IsNullOrWhiteSpace([string]$diagnosis.branch)) "$Name diagnosis omitted branch"
+  Assert (-not[string]::IsNullOrWhiteSpace([string]$diagnosis.head)) "$Name diagnosis omitted HEAD"
+  Assert ($null-ne$diagnosis.gitStatus-and$null-ne$diagnosis.actualChangedFiles-and$null-ne$diagnosis.reportedChangedFiles) "$Name diagnosis omitted path/status arrays"
+  Assert ($null-ne$diagnosis.lock-and$null-ne$diagnosis.cleanup) "$Name diagnosis omitted lock/cleanup state"
+  Assert-Match ($run.Output-join "`n") 'LIAISON_FAILURE_DIAGNOSIS_BEGIN' "$Name did not print diagnosis"
   Assert-FakeGhHistory $state $gh $statePath;Assert-Equal ((Invoke-RealGit $Git $remote.Repo @('remote','get-url','origin'))-join '').Trim() '../remote.git' "$Name used a non-temporary origin"
   if($null-ne$wrapper){$wrapperLog=[IO.File]::ReadAllText($wrapper.Log,[Text.Encoding]::UTF8);Assert-Match $wrapperLog ("args="+$GitFailureCommand+"\b") "$Name Git wrapper did not inject the intended command";Assert ($env:FAKE_GIT_REAL-ne$wrapper.Executable) "$Name Git wrapper delegates recursively"}
   Write-Host "Invoke-Once failure E2E passed: $Name (exit $ExpectedCode)."
@@ -377,6 +391,29 @@ function Test-ReworkPrCommentFailure($Context,[string]$Git) {
   Assert-BaseState $Git $Context.Remote $true;Assert-FakeGhHistory $state $Context.Gh $Context.StatePath
   Write-Host 'Invoke-Once failure E2E passed: existing PR comment failure after a pushed rework commit.'
   return [pscustomobject]@{Name='PR comment failure';ExitCode=$run.ExitCode;Clean=$true;RemoteBranch=$true;GhCalls=@($state.ghCalls).Count;CodexCalls=@($state.codexCalls).Count}
+}
+
+function Test-ReworkDirtyCheckoutFailure($Context,[string]$Git) {
+  $state=Read-State $Context.StatePath;$pr=Get-StatePr $state $Context.PrNumber;$currentHead=Get-BareBranchSha $Git $Context.Remote $Context.Branch
+  $issue=Get-StateIssue $state $Context.IssueNumber;$issue.labels=@('gm-approved',[pscustomobject]@{name='ready-for-codex'})
+  $approval=[pscustomobject][ordered]@{id='approval-dirty';targetType='issue';number=$Context.IssueNumber;body="LIAISON_REWORK_APPROVED $currentHead";author=[pscustomobject]@{login='owner'};createdAt=([DateTime]$pr.createdAt).AddMinutes(20).ToUniversalTime().ToString('o');url='https://github.test/approval-dirty'}
+  $state.comments=@($state.comments)+@($approval);$state.failures=@();$state.codexBehavior.mode='report-mismatch';$state.codexBehavior.file='allowed.txt';Save-State $Context.StatePath $state
+  Set-FixtureEnvironment $Context.Gh $Context.StatePath $Context.LogPath $Git $Context.Remote.Repo
+  $run=Invoke-Relay 'Once' $Context.ConfigPath $Context.Remote.Repo;Assert-Equal $run.ExitCode 60 "dirty rework failure exit: $($run.Output-join ' | ')"
+  $state=Read-State $Context.StatePath;Assert-FailureState $state $Context.IssueNumber
+  $branch=((Invoke-RealGit $Git $Context.Remote.Repo @('branch','--show-current'))-join '').Trim();Assert-Equal $branch $Context.Branch 'dirty rework branch was not preserved after checkout failure'
+  $status=((Invoke-RealGit $Git $Context.Remote.Repo @('status','--porcelain=v1','--untracked-files=all'))-join "`n").Trim();Assert-Match $status 'allowed\.txt' 'dirty rework file was not preserved'
+  $diagnosisFiles=@(Get-ChildItem -LiteralPath (Join-Path $Context.Remote.Repo 'tools\liaison-officer\.runtime\logs') -Filter 'failure-diagnosis.json' -File -Recurse|Sort-Object LastWriteTimeUtc)
+  Assert ($diagnosisFiles.Count-gt0) 'dirty rework diagnosis file missing'
+  $diagnosis=[IO.File]::ReadAllText($diagnosisFiles[-1].FullName,[Text.Encoding]::UTF8)|ConvertFrom-Json
+  Assert-Match $diagnosis.cleanup.branchReturn '^failed; preserved worktree:' 'dirty rework checkout failure was not recorded'
+  Assert ('allowed.txt'-in@($diagnosis.actualChangedFiles)) 'dirty rework actual path was not diagnosed'
+  Assert ('other.txt'-in@($diagnosis.reportedChangedFiles)) 'dirty rework reported path was not diagnosed'
+  Assert-Equal $diagnosis.diffCheck 'passed' 'dirty rework diff check diagnosis'
+  Assert ($diagnosis.lock.acquired-and$diagnosis.lock.released) 'dirty rework lock lifecycle was not diagnosed'
+  Assert (-not(Test-Path -LiteralPath (Join-Path $Context.Remote.Repo 'tools\liaison-officer\.runtime\state\liaison.lock'))) 'dirty rework retained local lock'
+  Write-Host 'Invoke-Once failure E2E passed: dirty approved rework preserved its branch and diff while labels, comment, and automatic diagnosis continued.'
+  return [pscustomobject]@{Name='dirty rework checkout failure';ExitCode=$run.ExitCode;Clean=$false;RemoteBranch=$true;GhCalls=@($state.ghCalls).Count;CodexCalls=@($state.codexCalls).Count}
 }
 
 $temp=Join-Path $env:TEMP ('liaison-entry-e2e-'+[Guid]::NewGuid().ToString('N'))
@@ -411,6 +448,7 @@ try {
   $labelFailure=[pscustomobject][ordered]@{command='issue edit';argvContains='--remove-label ready-for-codex';mode='no-op';remaining=1;exitCode=0;stderr=''}
   $failureResults+=@(Test-InitialFailure -Directory (Join-Path $temp 'failure-label-confirmation') -Git $git -Codex $codex -Name 'label transition confirmation failure' -CodexMode 'success' -ExpectedCode 70 -GhFailure $labelFailure -ExpectedClean $true -ExpectedRemoteBranch $false -ExpectedCodexCalls 0)
   $failureResults+=@(Test-ReworkPrCommentFailure $successContext $git)
+  $failureResults+=@(Test-ReworkDirtyCheckoutFailure $successContext $git)
 
   $summary=[pscustomobject][ordered]@{
     contractInventoryRows=$contractResult.Contracts;directGhCalls=$contractResult.Calls;dryRunCases=@($dryRunResults).Count

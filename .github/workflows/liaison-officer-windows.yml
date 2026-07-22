@@ -1,0 +1,46 @@
+name: Liaison Officer Windows Regression
+
+on:
+  pull_request:
+    paths:
+      - "tools/liaison-officer/**"
+      - ".github/workflows/liaison-officer-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  powershell-51:
+    name: Windows PowerShell 5.1
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5) {
+            throw "Expected Windows PowerShell 5.1; got $($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion)"
+          }
+          $PSVersionTable | Out-String | Write-Host
+
+      - name: Run relay integration tests
+        shell: powershell
+        run: |
+          & .\tools\liaison-officer\tests\relay.tests.ps1
+
+      - name: Run relay entry-point E2E tests
+        if: always()
+        shell: powershell
+        run: |
+          & .\tools\liaison-officer\tests\relay.entrypoint.tests.ps1
+
+      - name: Run Windows entry-point regression tests
+        if: always()
+        shell: powershell
+        run: |
+          & .\tools\liaison-officer\tests\relay.windows-entrypoint.tests.ps1

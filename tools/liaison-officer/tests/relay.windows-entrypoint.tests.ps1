@@ -16,7 +16,8 @@ foreach ($path in @($source, $installer)) {
   $errors = $null
   [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
   if ($errors.Count) {
-    throw "$path parse failed: $($errors | ForEach-Object Message -join '; ')"
+    $parseMessages = ($errors | ForEach-Object { $_.Message }) -join '; '
+    throw "$path parse failed: $parseMessages"
   }
 }
 
@@ -26,6 +27,14 @@ if ($sourceText -notmatch 'StandardOutputEncoding\s*=\s*\$utf8') {
 }
 if ($sourceText -notmatch 'StandardErrorEncoding\s*=\s*\$utf8') {
   throw 'Windows entrypoint does not explicitly decode native stderr as UTF-8.'
+}
+if ($sourceText -notmatch 'Stdout\s*=\s*@\(\$stdout\)' -or
+    $sourceText -notmatch 'Stderr\s*=\s*@\(\$stderr\)' -or
+    $sourceText -notmatch 'Output\s*=\s*@\(\$stdout\)') {
+  throw 'Windows entrypoint does not return separate stdout/stderr arrays with a stdout-only compatibility alias.'
+}
+if ($sourceText -match '\$output\s*\+=\s*\$stderr') {
+  throw 'Windows entrypoint still merges stderr into the path-consumed output stream.'
 }
 if ($sourceText -notmatch '\$requestedCodexSmokeTest\s*=\s*\[bool\]\$RunCodexSmokeTest') {
   throw 'Windows entrypoint does not preserve the requested Codex smoke switch before importing relay.ps1.'
@@ -70,6 +79,7 @@ $title = -join @(
   [char]0x8EE2
 )
 $json = '[{"number":20,"title":"' + $title + '","createdAt":"2026-01-01T00:00:00Z","labels":[{"name":"gm-approved"},{"name":"ready-for-codex"}],"url":"https://github.test/owner/repo/issues/20"}]'
+[Console]::Error.WriteLine('warning: LF will be replaced by CRLF')
 [Console]::Out.Write($json)
 '@
   [IO.File]::WriteAllText((Join-Path $temp 'fake-gh.ps1'), $fakeGhScript, [Text.Encoding]::ASCII)
@@ -115,6 +125,14 @@ function Quote-ProcessArgument([string]$Value) {
   if ($Value -notmatch '[\s"]') { return $Value }
   return '"' + ($Value -replace '(\\*)"','$1$1\"' -replace '(\\*)$','$1$1') + '"'
 }
+function Convert-ProcessTextToLines([string]$Text) {
+  if ([string]::IsNullOrEmpty($Text)) { return @() }
+  $trimmed = $Text.TrimEnd([char[]]"`r`n")
+  if ([string]::IsNullOrEmpty($trimmed)) { return @() }
+  return @($trimmed -split "`r?`n")
+}
+function Get-ToolCombinedLines($Result) { return @(@($Result.Stdout) + @($Result.Stderr)) }
+function Write-NativeStderrLog([string]$FileName,[string[]]$Arguments,[string[]]$Stderr) {}
 function Get-Config {
   return [pscustomobject]@{
     gitExecutable = $env:ComSpec
@@ -201,7 +219,7 @@ function Complete-Failure($Config, [string]$Message) {}
     throw "UTF-8 Japanese gh JSON was not preserved: $($dry.Stdout)"
   }
 
-  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: smoke switch preserved across relay import, ASCII-safe UTF-8 fixture, explicit native stdout/stderr decoding, default config path, native gh JSON, non-Git smoke flag, README, and Scheduled Task routing.'
+  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: smoke switch preserved across relay import, ASCII-safe UTF-8 fixture, CRLF-like stderr isolated from native gh JSON, explicit native stdout/stderr decoding, default config path, non-Git smoke flag, README, and Scheduled Task routing.'
 } finally {
   if ($null -eq $previousFakeGh) { Remove-Item Env:\FAKE_GH -ErrorAction SilentlyContinue } else { $env:FAKE_GH = $previousFakeGh }
   if ($null -eq $previousFakeCodex) { Remove-Item Env:\FAKE_CODEX -ErrorAction SilentlyContinue } else { $env:FAKE_CODEX = $previousFakeCodex }

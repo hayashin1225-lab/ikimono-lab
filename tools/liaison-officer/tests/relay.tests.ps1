@@ -9,7 +9,10 @@ $relay = Join-Path $Root 'tools\liaison-officer\relay.ps1'
 $git = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $git) { $git = 'C:\Users\User\AppData\Local\GitHubDesktop\app-3.6.2\resources\app\git\mingw64\bin\git.exe' }
 $tokens=$null; $errors=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($relay,[ref]$tokens,[ref]$errors)
-if($errors.Count){throw ($errors|ForEach-Object Message -join '; ')}
+if($errors.Count){throw (($errors | ForEach-Object { $_.Message }) -join '; ')}
+$relayText=Get-Content -Raw -Encoding UTF8 -LiteralPath $relay
+foreach($property in @('StandardOutputEncoding','StandardErrorEncoding')){if($relayText-notmatch($property+'\s*=\s*\$utf8')){throw "Codex worker does not set $property to UTF-8."}}
+if($relayText-notmatch'\$utf8\.GetBytes\(\$prompt\)' -or $relayText-notmatch'StandardInput\.BaseStream\.Write\('){throw 'Codex worker does not write stdin as explicit UTF-8 bytes.'}
 
 $results = New-Object System.Collections.Generic.List[object]
 function Invoke-Case([string]$Name,[scriptblock]$Body) {
@@ -29,6 +32,62 @@ try {
   $config=[pscustomobject]@{RepoPath=$repo; GitPath=$git; GhPath='fake'; CodexPath='fake'; baseBranch='main'; protectedPaths=@('index.html','README.md','.github/workflows/*','archive/codex-sites-deployment*'); timeoutMinutes=1; LogPath=(Join-Path $runtime 'logs'); StatePath=(Join-Path $runtime 'state'); TempPath=(Join-Path $runtime 'temp')}
   $env:LIAISON_OFFICER_IMPORT='1'; . $relay; Remove-Item Env:\LIAISON_OFFICER_IMPORT
   $base=Get-GitValue $config @('rev-parse','HEAD')
+  Invoke-Case 'native stdout stderr stay separate as UTF-8 arrays and stderr is logged' {
+    $fixture=Join-Path $sandbox 'stream-fixture.ps1'
+    $fixtureText=@'
+param([ValidateSet('zero','one','multiple')][string]$Mode)
+$utf8=New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding=$utf8
+$warning=-join @([char]0x65E5,[char]0x672C,[char]0x8A9E,[char]0x8B66,[char]0x544A)
+if($Mode-eq'one'){[Console]::Out.WriteLine('one.txt')}
+if($Mode-eq'multiple'){[Console]::Out.WriteLine('one.txt');[Console]::Out.WriteLine('two.txt')}
+[Console]::Error.WriteLine($warning)
+'@
+    [IO.File]::WriteAllText($fixture,$fixtureText,[Text.Encoding]::ASCII)
+    $streamLog=Join-Path $sandbox 'stream-log';New-Item -ItemType Directory -Force -Path $streamLog|Out-Null;$script:ActiveRunDirectory=$streamLog
+    try {
+      $powershell=(Get-Command powershell.exe -ErrorAction Stop).Source
+      $zero=Invoke-Tool $powershell @('-NoProfile','-ExecutionPolicy','Bypass','-File',$fixture,'-Mode','zero') $sandbox
+      $one=Invoke-Tool $powershell @('-NoProfile','-ExecutionPolicy','Bypass','-File',$fixture,'-Mode','one') $sandbox
+      $multiple=Invoke-Tool $powershell @('-NoProfile','-ExecutionPolicy','Bypass','-File',$fixture,'-Mode','multiple') $sandbox
+      if(@($zero.Stdout).Count-ne0-or@($zero.Stderr).Count-ne1){throw 'zero-line stream shape was not preserved'}
+      if(@($one.Stdout).Count-ne1-or@($one.Stderr).Count-ne1-or@($one.Output).Count-ne1){throw 'one-line stream shape was not preserved'}
+      if(@($multiple.Stdout).Count-ne2-or@($multiple.Stderr).Count-ne1-or@($multiple.Output).Count-ne2){throw 'multiple-line stream shape was not preserved'}
+      if($multiple.Output-contains$multiple.Stderr[0]){throw 'stderr leaked into the stdout compatibility alias'}
+      $stderrLog=[IO.File]::ReadAllText((Join-Path $streamLog 'native.stderr.log'),[Text.Encoding]::UTF8)
+      $expected=-join @([char]0x65E5,[char]0x672C,[char]0x8A9E,[char]0x8B66,[char]0x544A)
+      if($stderrLog-notmatch[regex]::Escape($expected)){throw 'UTF-8 stderr was not preserved in the native stderr log'}
+    } finally { $script:ActiveRunDirectory=$null }
+  }
+
+  Invoke-Case 'CRLF warning on stderr is logged but never becomes a changed path' {
+    $warningGit=Join-Path $sandbox 'warning-git.cmd'
+    $warningGitText=@'
+@echo off
+"%LIAISON_TEST_REAL_GIT%" %*
+set code=%ERRORLEVEL%
+if %code%==0 if /I "%~1"=="diff" if /I "%~2"=="--name-only" echo warning: LF will be replaced by CRLF 1>&2
+exit /b %code%
+'@ -replace "`n","`r`n"
+    [IO.File]::WriteAllText($warningGit,$warningGitText,[Text.Encoding]::ASCII)
+    $env:LIAISON_TEST_REAL_GIT=$git
+    $warningLog=Join-Path $sandbox 'warning-log';New-Item -ItemType Directory -Force -Path $warningLog|Out-Null;$script:ActiveRunDirectory=$warningLog
+    try {
+      'ok'|Set-Content -NoNewline (Join-Path $repo 'allowed.txt')
+      $warningConfig=[pscustomobject]@{RepoPath=$repo;GitPath=$warningGit;GhPath='fake';CodexPath='fake';baseBranch='main';protectedPaths=$config.protectedPaths;timeoutMinutes=1;LogPath=$config.LogPath;StatePath=$config.StatePath;TempPath=$config.TempPath}
+      $report='LIAISON_REPORT_BEGIN'+"`n"+'{"status":"success","summary":"ok","changedFiles":["allowed.txt"],"tests":["fake"],"unresolved":[],"humanReview":true}'+"`nLIAISON_REPORT_END"
+      [void](Test-WorkerResult $warningConfig 'main' $base ([pscustomobject]@{ExitCode=0;Stdout=$report}))
+      $paths=@(Get-ChangedPaths $warningConfig)
+      if($paths.Count-ne1-or$paths[0]-ne'allowed.txt'){throw "CRLF stderr changed the path set: $($paths-join ', ')"}
+      $stderrLog=[IO.File]::ReadAllText((Join-Path $warningLog 'native.stderr.log'),[Text.Encoding]::UTF8)
+      if($stderrLog-notmatch'LF will be replaced by CRLF'){throw 'CRLF warning was not retained in stderr log'}
+    } finally {
+      Remove-Item Env:\LIAISON_TEST_REAL_GIT -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $repo 'allowed.txt') -ErrorAction SilentlyContinue
+      $script:ActiveRunDirectory=$null
+    }
+  }
+
   Invoke-Case 'SelfTest executes against fake GitHub and Codex CLIs without removing existing state' {
     & $git -C $repo update-ref refs/remotes/origin/main HEAD
     $fakeGh=Join-Path $sandbox 'fake-gh.cmd'; $fakeCodex=Join-Path $sandbox 'fake-codex.cmd'
@@ -93,12 +152,28 @@ exit /b 1
   }
   Invoke-Case 'timeout records output error taskkill log and terminates parent child' {
     $workerScript=Join-Path $sandbox 'fake-codex.ps1'; @'
+param(
+  [string]$C,
+  [Parameter(ValueFromRemainingArguments=$true)]
+  [string[]]$Remaining
+)
 $child=Start-Process powershell.exe -ArgumentList '-NoProfile -Command Start-Sleep -Seconds 30' -PassThru
 Write-Output "child=$($child.Id)"; Write-Error 'fake stderr'; Start-Sleep -Seconds 30
 '@ | Set-Content -Encoding UTF8 $workerScript
     $timeoutConfig=[pscustomobject]@{CodexPath=(Get-Command powershell.exe).Source;codexSubcommand='-NoProfile';codexArguments=@('-ExecutionPolicy','Bypass','-File',$workerScript);RepoPath=$repo;repository='owner/repo';timeoutMinutes=0.01}
     $run=Join-Path $sandbox 'timeout-run'; New-Item -ItemType Directory -Force -Path $run|Out-Null
-    Assert-Throws { Invoke-CodexWorker $timeoutConfig ([pscustomobject]@{number=42}) 'main' 'snapshot' $run } 'timed out'
+    try {
+      [void](Invoke-CodexWorker $timeoutConfig ([pscustomobject]@{number=42}) 'main' 'snapshot' $run)
+      $unexpectedStdout=if(Test-Path (Join-Path $run 'codex.stdout.log')){Get-Content -Raw (Join-Path $run 'codex.stdout.log')}else{'[missing]'}
+      $unexpectedStderr=if(Test-Path (Join-Path $run 'codex.stderr.log')){Get-Content -Raw (Join-Path $run 'codex.stderr.log')}else{'[missing]'}
+      throw "Expected timeout but worker returned. stdout=[$unexpectedStdout] stderr=[$unexpectedStderr]"
+    } catch {
+      if($_.Exception.Message -notmatch 'timed out'){
+        $unexpectedStdout=if(Test-Path (Join-Path $run 'codex.stdout.log')){Get-Content -Raw (Join-Path $run 'codex.stdout.log')}else{'[missing]'}
+        $unexpectedStderr=if(Test-Path (Join-Path $run 'codex.stderr.log')){Get-Content -Raw (Join-Path $run 'codex.stderr.log')}else{'[missing]'}
+        throw "Unexpected timeout outcome: $($_.Exception.Message); stdout=[$unexpectedStdout] stderr=[$unexpectedStderr]"
+      }
+    }
     foreach($file in @('codex.stdout.log','codex.stderr.log','taskkill.log')){if(-not(Test-Path (Join-Path $run $file))){throw "Missing timeout log $file"}}
     $childLine=Get-Content -Raw (Join-Path $run 'codex.stdout.log'); if($childLine -match 'child=(\d+)'){if(Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue){throw 'Fake worker child remains after timeout.'}}
   }
