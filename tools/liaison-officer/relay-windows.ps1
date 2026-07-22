@@ -34,6 +34,65 @@ try {
   $env:LIAISON_OFFICER_IMPORT = '1'
   . $relayPath -Mode $Mode -ConfigPath $ConfigPath
 
+  # Windows PowerShell 5.1 may decode native stdout using the active legacy
+  # code page even when Console.OutputEncoding and $OutputEncoding are UTF-8.
+  # Use ProcessStartInfo with explicit UTF-8 stream decoders for every tool
+  # call made through the relay. Batch fixtures remain supported for the
+  # disposable entrypoint regression by routing them through cmd.exe.
+  function Invoke-Tool([string]$FileName, [string[]]$Arguments, [string]$WorkingDirectory) {
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $extension = [IO.Path]::GetExtension($FileName)
+
+    if ($extension -in @('.cmd', '.bat')) {
+      $command = Quote-ProcessArgument ([string]$FileName)
+      if ($Arguments.Count -gt 0) {
+        $command += ' ' + (($Arguments | ForEach-Object {
+          Quote-ProcessArgument ([string]$_)
+        }) -join ' ')
+      }
+      $info.FileName = $env:ComSpec
+      $info.Arguments = '/d /s /c "' + $command + '"'
+    } else {
+      $info.FileName = $FileName
+      $info.Arguments = (($Arguments | ForEach-Object {
+        Quote-ProcessArgument ([string]$_)
+      }) -join ' ')
+    }
+
+    $info.WorkingDirectory = $WorkingDirectory
+    $info.UseShellExecute = $false
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $info.CreateNoWindow = $true
+    $info.StandardOutputEncoding = $utf8
+    $info.StandardErrorEncoding = $utf8
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $info
+    if (-not $process.Start()) {
+      throw "Process did not start: $FileName"
+    }
+
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+
+    $output = @()
+    if (-not [string]::IsNullOrEmpty($stdout)) {
+      $output += $stdout.TrimEnd("`r", "`n")
+    }
+    if (-not [string]::IsNullOrEmpty($stderr)) {
+      $output += $stderr.TrimEnd("`r", "`n")
+    }
+
+    return [pscustomobject]@{
+      ExitCode = $process.ExitCode
+      Output = @($output)
+    }
+  }
+
   $config = Get-Config
   $config | Add-Member -NotePropertyName GitPath -NotePropertyValue (Resolve-Executable $config.gitExecutable 'Git')
   $config | Add-Member -NotePropertyName GhPath -NotePropertyValue (Resolve-Executable $config.ghExecutable 'GitHub CLI')
