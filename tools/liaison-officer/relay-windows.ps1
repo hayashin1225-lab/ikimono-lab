@@ -13,12 +13,18 @@ $relayPath = Join-Path $PSScriptRoot 'relay.ps1'
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
   $ConfigPath = Join-Path $PSScriptRoot 'config.local.json'
 }
+if (-not (Test-Path -LiteralPath $relayPath)) {
+  throw "relay.ps1 is missing: $relayPath"
+}
 
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $previousInputEncoding = [Console]::InputEncoding
 $previousOutputEncoding = [Console]::OutputEncoding
 $previousPipelineEncoding = $OutputEncoding
 $previousImport = $env:LIAISON_OFFICER_IMPORT
+$config = $null
+$LockHandle = $null
+$script:CurrentStage = 'preflight'
 
 try {
   [Console]::InputEncoding = $utf8
@@ -79,10 +85,12 @@ try {
   Invoke-Once $config
   exit $ExitCode.Success
 } catch {
-  if ($LockHandle) {
+  if ($LockHandle -and $null -ne $config) {
     try { Release-LocalLock $config } catch {}
   }
-  try { Complete-Failure $config $_.Exception.Message } catch {}
+  if ($null -ne $config) {
+    try { Complete-Failure $config $_.Exception.Message } catch {}
+  }
   $stageCodes = @{
     preflight = 30
     selection = 10
