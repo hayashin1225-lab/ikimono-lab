@@ -4,8 +4,7 @@ $ErrorActionPreference = 'Stop'
 $implementation = Join-Path $PSScriptRoot 'fake-gh.ps1'
 if (-not (Test-Path -LiteralPath $implementation -PathType Leaf)) {
   [Console]::Error.WriteLine("Fake gh implementation is missing: $implementation")
-  $global:LASTEXITCODE = 78
-  return
+  exit 78
 }
 
 $previousArguments = $env:FAKE_GH_ARGV_JSON
@@ -22,4 +21,4 @@ try {
 }
 
 foreach ($line in @($output)) { Write-Output $line }
-$global:LASTEXITCODE = $code
+exit $code
