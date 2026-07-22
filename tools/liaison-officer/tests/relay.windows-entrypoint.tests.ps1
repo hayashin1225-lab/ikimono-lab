@@ -95,6 +95,10 @@ $RunId = 'TEST'
 
 function Write-Result([string]$Message) { Write-Output "[$RunId] $Message" }
 function Stop-WithCode([int]$Code, [string]$Message) { Write-Error $Message -ErrorAction Continue; exit $Code }
+function Quote-ProcessArgument([string]$Value) {
+  if ($Value -notmatch '[\s"]') { return $Value }
+  return '"' + ($Value -replace '(\\*)"','$1$1\"' -replace '(\\*)$','$1$1') + '"'
+}
 function Get-Config {
   return [pscustomobject]@{
     gitExecutable = $env:ComSpec
