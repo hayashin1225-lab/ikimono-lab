@@ -11,7 +11,8 @@ if (-not $git) { $git = 'C:\Users\User\AppData\Local\GitHubDesktop\app-3.6.2\res
 $tokens=$null; $errors=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($relay,[ref]$tokens,[ref]$errors)
 if($errors.Count){throw (($errors | ForEach-Object { $_.Message }) -join '; ')}
 $relayText=Get-Content -Raw -Encoding UTF8 -LiteralPath $relay
-foreach($property in @('StandardInputEncoding','StandardOutputEncoding','StandardErrorEncoding')){if($relayText-notmatch($property+'\s*=\s*\$utf8')){throw "Codex worker does not set $property to UTF-8."}}
+foreach($property in @('StandardOutputEncoding','StandardErrorEncoding')){if($relayText-notmatch($property+'\s*=\s*\$utf8')){throw "Codex worker does not set $property to UTF-8."}}
+if($relayText-notmatch'\$utf8\.GetBytes\(\$prompt\)' -or $relayText-notmatch'StandardInput\.BaseStream\.Write\('){throw 'Codex worker does not write stdin as explicit UTF-8 bytes.'}
 
 $results = New-Object System.Collections.Generic.List[object]
 function Invoke-Case([string]$Name,[scriptblock]$Body) {
