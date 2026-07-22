@@ -20,6 +20,14 @@ foreach ($path in @($source, $installer)) {
   }
 }
 
+$sourceText = Get-Content -Raw -Encoding UTF8 -LiteralPath $source
+if ($sourceText -notmatch 'StandardOutputEncoding\s*=\s*\$utf8') {
+  throw 'Windows entrypoint does not explicitly decode native stdout as UTF-8.'
+}
+if ($sourceText -notmatch 'StandardErrorEncoding\s*=\s*\$utf8') {
+  throw 'Windows entrypoint does not explicitly decode native stderr as UTF-8.'
+}
+
 $installerText = Get-Content -Raw -Encoding UTF8 -LiteralPath $installer
 if ($installerText -notmatch 'relay-windows\.ps1') {
   throw 'Scheduled Task installer does not route through relay-windows.ps1.'
@@ -104,18 +112,7 @@ function Get-Config {
 }
 function Resolve-Executable([string]$Value, [string]$Name) { return (Resolve-Path -LiteralPath $Value).Path }
 function Invoke-Tool([string]$FileName, [string[]]$Arguments, [string]$WorkingDirectory) {
-  $old = Get-Location
-  $previousErrorActionPreference = $ErrorActionPreference
-  try {
-    Set-Location -LiteralPath $WorkingDirectory
-    $ErrorActionPreference = 'Continue'
-    $output = & $FileName @Arguments 2>&1
-    $code = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = $previousErrorActionPreference
-    Set-Location -LiteralPath $old
-  }
-  return [pscustomobject]@{ ExitCode = $code; Output = @($output | ForEach-Object { $_.ToString() }) }
+  throw 'relay-windows.ps1 did not replace the legacy native invocation path.'
 }
 function Test-SelfTest($Config) {
   if ([Console]::OutputEncoding.WebName -ne 'utf-8') { throw 'console output encoding was not UTF-8' }
@@ -168,12 +165,13 @@ function Complete-Failure($Config, [string]$Message) {}
   if ($self.ExitCode -ne 0) { throw "SelfTest wrapper failed: $($self.Stdout) $($self.Stderr)" }
   if ($self.Stdout -notmatch 'Codex smoke test passed') { throw "smoke success marker was absent: $($self.Stdout)" }
   if ($self.Stdout -notmatch 'SelfTest completed') { throw 'SelfTest completion marker was absent' }
+  if ($self.Stdout -notmatch 'OpenAI Codex vTEST') { throw 'native Codex stderr banner was not captured without terminating the run' }
 
   $dry = Invoke-TestProcess @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $temp 'relay-windows.ps1'), '-Mode', 'DryRun')
   if ($dry.ExitCode -ne 0) { throw "DryRun wrapper failed: $($dry.Stdout) $($dry.Stderr)" }
   if ($dry.Stdout -notmatch '日本語の試運転') { throw "UTF-8 Japanese gh JSON was not preserved: $($dry.Stdout)" }
 
-  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: default config path, native UTF-8 gh JSON, native Codex stderr tolerance, non-Git smoke flag, README, and Scheduled Task routing.'
+  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: explicit native UTF-8 decoding, default config path, native gh JSON, native Codex stderr, non-Git smoke flag, README, and Scheduled Task routing.'
 } finally {
   if ($null -eq $previousFakeGh) { Remove-Item Env:\FAKE_GH -ErrorAction SilentlyContinue } else { $env:FAKE_GH = $previousFakeGh }
   if ($null -eq $previousFakeCodex) { Remove-Item Env:\FAKE_CODEX -ErrorAction SilentlyContinue } else { $env:FAKE_CODEX = $previousFakeCodex }
