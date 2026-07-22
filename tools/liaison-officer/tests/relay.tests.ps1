@@ -152,6 +152,11 @@ exit /b 1
   }
   Invoke-Case 'timeout records output error taskkill log and terminates parent child' {
     $workerScript=Join-Path $sandbox 'fake-codex.ps1'; @'
+param(
+  [string]$C,
+  [Parameter(ValueFromRemainingArguments=$true)]
+  [string[]]$Remaining
+)
 $child=Start-Process powershell.exe -ArgumentList '-NoProfile -Command Start-Sleep -Seconds 30' -PassThru
 Write-Output "child=$($child.Id)"; Write-Error 'fake stderr'; Start-Sleep -Seconds 30
 '@ | Set-Content -Encoding UTF8 $workerScript
