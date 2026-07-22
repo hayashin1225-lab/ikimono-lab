@@ -41,12 +41,13 @@ try {
   # disposable entrypoint regression by routing them through cmd.exe.
   function Invoke-Tool([string]$FileName, [string[]]$Arguments, [string]$WorkingDirectory) {
     $info = New-Object System.Diagnostics.ProcessStartInfo
-    $extension = [IO.Path]::GetExtension($FileName)
+    $argumentList = @($Arguments)
+    $extension = ([IO.Path]::GetExtension($FileName)).ToLowerInvariant()
 
     if ($extension -in @('.cmd', '.bat')) {
       $command = Quote-ProcessArgument ([string]$FileName)
-      if ($Arguments.Count -gt 0) {
-        $command += ' ' + (($Arguments | ForEach-Object {
+      if ($argumentList.Count -gt 0) {
+        $command += ' ' + (($argumentList | ForEach-Object {
           Quote-ProcessArgument ([string]$_)
         }) -join ' ')
       }
@@ -54,7 +55,7 @@ try {
       $info.Arguments = '/d /s /c "' + $command + '"'
     } else {
       $info.FileName = $FileName
-      $info.Arguments = (($Arguments | ForEach-Object {
+      $info.Arguments = (($argumentList | ForEach-Object {
         Quote-ProcessArgument ([string]$_)
       }) -join ' ')
     }
@@ -69,27 +70,31 @@ try {
 
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $info
-    if (-not $process.Start()) {
-      throw "Process did not start: $FileName"
-    }
+    try {
+      if (-not $process.Start()) {
+        throw "Process did not start: $FileName"
+      }
 
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
-    $process.WaitForExit()
-    $stdout = $stdoutTask.GetAwaiter().GetResult()
-    $stderr = $stderrTask.GetAwaiter().GetResult()
+      $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+      $stderrTask = $process.StandardError.ReadToEndAsync()
+      $process.WaitForExit()
+      $stdout = $stdoutTask.GetAwaiter().GetResult()
+      $stderr = $stderrTask.GetAwaiter().GetResult()
 
-    $output = @()
-    if (-not [string]::IsNullOrEmpty($stdout)) {
-      $output += $stdout.TrimEnd("`r", "`n")
-    }
-    if (-not [string]::IsNullOrEmpty($stderr)) {
-      $output += $stderr.TrimEnd("`r", "`n")
-    }
+      $output = @()
+      if (-not [string]::IsNullOrEmpty($stdout)) {
+        $output += $stdout.TrimEnd([char[]]"`r`n")
+      }
+      if (-not [string]::IsNullOrEmpty($stderr)) {
+        $output += $stderr.TrimEnd([char[]]"`r`n")
+      }
 
-    return [pscustomobject]@{
-      ExitCode = $process.ExitCode
-      Output = @($output)
+      return [pscustomobject]@{
+        ExitCode = $process.ExitCode
+        Output = @($output)
+      }
+    } finally {
+      $process.Dispose()
     }
   }
 
