@@ -16,7 +16,8 @@ foreach ($path in @($source, $installer)) {
   $errors = $null
   [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
   if ($errors.Count) {
-    throw "$path parse failed: $($errors | ForEach-Object Message -join '; ')"
+    $parseMessages = ($errors | ForEach-Object { $_.Message }) -join '; '
+    throw "$path parse failed: $parseMessages"
   }
 }
 
