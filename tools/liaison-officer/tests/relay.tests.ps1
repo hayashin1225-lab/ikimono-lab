@@ -157,7 +157,18 @@ Write-Output "child=$($child.Id)"; Write-Error 'fake stderr'; Start-Sleep -Secon
 '@ | Set-Content -Encoding UTF8 $workerScript
     $timeoutConfig=[pscustomobject]@{CodexPath=(Get-Command powershell.exe).Source;codexSubcommand='-NoProfile';codexArguments=@('-ExecutionPolicy','Bypass','-File',$workerScript);RepoPath=$repo;repository='owner/repo';timeoutMinutes=0.01}
     $run=Join-Path $sandbox 'timeout-run'; New-Item -ItemType Directory -Force -Path $run|Out-Null
-    Assert-Throws { Invoke-CodexWorker $timeoutConfig ([pscustomobject]@{number=42}) 'main' 'snapshot' $run } 'timed out'
+    try {
+      [void](Invoke-CodexWorker $timeoutConfig ([pscustomobject]@{number=42}) 'main' 'snapshot' $run)
+      $unexpectedStdout=if(Test-Path (Join-Path $run 'codex.stdout.log')){Get-Content -Raw (Join-Path $run 'codex.stdout.log')}else{'[missing]'}
+      $unexpectedStderr=if(Test-Path (Join-Path $run 'codex.stderr.log')){Get-Content -Raw (Join-Path $run 'codex.stderr.log')}else{'[missing]'}
+      throw "Expected timeout but worker returned. stdout=[$unexpectedStdout] stderr=[$unexpectedStderr]"
+    } catch {
+      if($_.Exception.Message -notmatch 'timed out'){
+        $unexpectedStdout=if(Test-Path (Join-Path $run 'codex.stdout.log')){Get-Content -Raw (Join-Path $run 'codex.stdout.log')}else{'[missing]'}
+        $unexpectedStderr=if(Test-Path (Join-Path $run 'codex.stderr.log')){Get-Content -Raw (Join-Path $run 'codex.stderr.log')}else{'[missing]'}
+        throw "Unexpected timeout outcome: $($_.Exception.Message); stdout=[$unexpectedStdout] stderr=[$unexpectedStderr]"
+      }
+    }
     foreach($file in @('codex.stdout.log','codex.stderr.log','taskkill.log')){if(-not(Test-Path (Join-Path $run $file))){throw "Missing timeout log $file"}}
     $childLine=Get-Content -Raw (Join-Path $run 'codex.stdout.log'); if($childLine -match 'child=(\d+)'){if(Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue){throw 'Fake worker child remains after timeout.'}}
   }
