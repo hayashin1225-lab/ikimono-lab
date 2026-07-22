@@ -52,12 +52,24 @@ try {
   Copy-Item -LiteralPath $source -Destination (Join-Path $temp 'relay-windows.ps1')
   '{}' | Set-Content -Encoding UTF8 (Join-Path $temp 'config.local.json')
 
+  # Keep the fixture source ASCII-only because Windows PowerShell 5.1 treats
+  # UTF-8 .ps1 files without a BOM as the active ANSI code page. Build the
+  # Japanese title from Unicode code points, then emit its JSON as UTF-8.
   $fakeGhScript = @'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-$json = '[{"number":20,"title":"日本語の試運転","createdAt":"2026-01-01T00:00:00Z","labels":[{"name":"gm-approved"},{"name":"ready-for-codex"}],"url":"https://github.test/owner/repo/issues/20"}]'
+$title = -join @(
+  [char]0x65E5,
+  [char]0x672C,
+  [char]0x8A9E,
+  [char]0x306E,
+  [char]0x8A66,
+  [char]0x904B,
+  [char]0x8EE2
+)
+$json = '[{"number":20,"title":"' + $title + '","createdAt":"2026-01-01T00:00:00Z","labels":[{"name":"gm-approved"},{"name":"ready-for-codex"}],"url":"https://github.test/owner/repo/issues/20"}]'
 [Console]::Out.Write($json)
 '@
-  [IO.File]::WriteAllText((Join-Path $temp 'fake-gh.ps1'), $fakeGhScript, [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText((Join-Path $temp 'fake-gh.ps1'), $fakeGhScript, [Text.Encoding]::ASCII)
   $fakeGhCmd = "@echo off`r`n`"$powerShell`" -NoProfile -ExecutionPolicy Bypass -File `"%~dp0fake-gh.ps1`"`r`nexit /b %ERRORLEVEL%"
   [IO.File]::WriteAllText((Join-Path $temp 'fake-gh.cmd'), $fakeGhCmd, [Text.Encoding]::ASCII)
 
@@ -138,7 +150,7 @@ function Invoke-Once($Config) { Write-Result 'fake Once passed' }
 function Release-LocalLock($Config) {}
 function Complete-Failure($Config, [string]$Message) {}
 '@
-  [IO.File]::WriteAllText((Join-Path $temp 'relay.ps1'), $fakeRelay, [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText((Join-Path $temp 'relay.ps1'), $fakeRelay, [Text.Encoding]::ASCII)
 
   function Invoke-TestProcess([string[]]$Arguments) {
     $info = New-Object System.Diagnostics.ProcessStartInfo
@@ -172,9 +184,20 @@ function Complete-Failure($Config, [string]$Message) {}
 
   $dry = Invoke-TestProcess @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $temp 'relay-windows.ps1'), '-Mode', 'DryRun')
   if ($dry.ExitCode -ne 0) { throw "DryRun wrapper failed: $($dry.Stdout) $($dry.Stderr)" }
-  if ($dry.Stdout -notmatch '日本語の試運転') { throw "UTF-8 Japanese gh JSON was not preserved: $($dry.Stdout)" }
+  $expectedTitle = -join @(
+    [char]0x65E5,
+    [char]0x672C,
+    [char]0x8A9E,
+    [char]0x306E,
+    [char]0x8A66,
+    [char]0x904B,
+    [char]0x8EE2
+  )
+  if ($dry.Stdout -notmatch [regex]::Escape($expectedTitle)) {
+    throw "UTF-8 Japanese gh JSON was not preserved: $($dry.Stdout)"
+  }
 
-  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: explicit native UTF-8 stdout/stderr decoding, default config path, native gh JSON, non-Git smoke flag, README, and Scheduled Task routing.'
+  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: ASCII-safe UTF-8 fixture, explicit native stdout/stderr decoding, default config path, native gh JSON, non-Git smoke flag, README, and Scheduled Task routing.'
 } finally {
   if ($null -eq $previousFakeGh) { Remove-Item Env:\FAKE_GH -ErrorAction SilentlyContinue } else { $env:FAKE_GH = $previousFakeGh }
   if ($null -eq $previousFakeCodex) { Remove-Item Env:\FAKE_CODEX -ErrorAction SilentlyContinue } else { $env:FAKE_CODEX = $previousFakeCodex }
