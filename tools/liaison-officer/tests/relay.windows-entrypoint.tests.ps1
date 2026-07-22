@@ -27,6 +27,9 @@ if ($sourceText -notmatch 'StandardOutputEncoding\s*=\s*\$utf8') {
 if ($sourceText -notmatch 'StandardErrorEncoding\s*=\s*\$utf8') {
   throw 'Windows entrypoint does not explicitly decode native stderr as UTF-8.'
 }
+if ($sourceText -notmatch '\$requestedCodexSmokeTest\s*=\s*\[bool\]\$RunCodexSmokeTest') {
+  throw 'Windows entrypoint does not preserve the requested Codex smoke switch before importing relay.ps1.'
+}
 
 $installerText = Get-Content -Raw -Encoding UTF8 -LiteralPath $installer
 if ($installerText -notmatch 'relay-windows\.ps1') {
@@ -93,7 +96,8 @@ exit /b 0
 [CmdletBinding()]
 param(
   [string]$Mode = 'SelfTest',
-  [string]$ConfigPath = ''
+  [string]$ConfigPath = '',
+  [switch]$RunCodexSmokeTest
 )
 
 if ($env:LIAISON_OFFICER_IMPORT -ne '1') { throw 'import guard was not set' }
@@ -179,7 +183,7 @@ function Complete-Failure($Config, [string]$Message) {}
 
   $self = Invoke-TestProcess @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $temp 'relay-windows.ps1'), '-Mode', 'SelfTest', '-RunCodexSmokeTest')
   if ($self.ExitCode -ne 0) { throw "SelfTest wrapper failed: $($self.Stdout) $($self.Stderr)" }
-  if ($self.Stdout -notmatch 'Codex smoke test passed') { throw "stderr smoke sentinel was not captured by the wrapper: $($self.Stdout)" }
+  if ($self.Stdout -notmatch 'Codex smoke test passed') { throw "requested smoke switch was lost across relay import or stderr sentinel was not captured: $($self.Stdout)" }
   if ($self.Stdout -notmatch 'SelfTest completed') { throw 'SelfTest completion marker was absent' }
 
   $dry = Invoke-TestProcess @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $temp 'relay-windows.ps1'), '-Mode', 'DryRun')
@@ -197,7 +201,7 @@ function Complete-Failure($Config, [string]$Message) {}
     throw "UTF-8 Japanese gh JSON was not preserved: $($dry.Stdout)"
   }
 
-  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: ASCII-safe UTF-8 fixture, explicit native stdout/stderr decoding, default config path, native gh JSON, non-Git smoke flag, README, and Scheduled Task routing.'
+  Write-Output 'Windows PowerShell 5.1 entrypoint regression passed: smoke switch preserved across relay import, ASCII-safe UTF-8 fixture, explicit native stdout/stderr decoding, default config path, native gh JSON, non-Git smoke flag, README, and Scheduled Task routing.'
 } finally {
   if ($null -eq $previousFakeGh) { Remove-Item Env:\FAKE_GH -ErrorAction SilentlyContinue } else { $env:FAKE_GH = $previousFakeGh }
   if ($null -eq $previousFakeCodex) { Remove-Item Env:\FAKE_CODEX -ErrorAction SilentlyContinue } else { $env:FAKE_CODEX = $previousFakeCodex }
