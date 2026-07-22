@@ -42,7 +42,7 @@ gh label create codex-failed --repo hayashin1225-lab/ikimono-lab --color B60205
 
 ## 実行
 
-Windows PowerShell 5.1では、UTF-8のGitHub CLI出力と非Git一時ディレクトリのCodex smoke testを正しく扱うため、`relay-windows.ps1`を入口として使用する。`relay.ps1`は内部の実行本体であり、直接起動しない。
+Windows PowerShell 5.1では、ネイティブCLIの標準出力・標準エラーをUTF-8として明示的に読み取り、日本語のGitHub JSONとCodex出力を保持するため、`relay-windows.ps1`を入口として使用する。`relay.ps1`は内部の実行本体であり、直接起動しない。
 
 ```powershell
 # 外部状態を変更しない環境確認
