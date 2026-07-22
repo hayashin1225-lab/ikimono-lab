@@ -82,20 +82,15 @@ try {
       $stdoutTask = $process.StandardOutput.ReadToEndAsync()
       $stderrTask = $process.StandardError.ReadToEndAsync()
       $process.WaitForExit()
-      $stdout = $stdoutTask.GetAwaiter().GetResult()
-      $stderr = $stderrTask.GetAwaiter().GetResult()
-
-      $output = @()
-      if (-not [string]::IsNullOrEmpty($stdout)) {
-        $output += $stdout.TrimEnd([char[]]"`r`n")
-      }
-      if (-not [string]::IsNullOrEmpty($stderr)) {
-        $output += $stderr.TrimEnd([char[]]"`r`n")
-      }
+      $stdout = @(Convert-ProcessTextToLines ($stdoutTask.GetAwaiter().GetResult()))
+      $stderr = @(Convert-ProcessTextToLines ($stderrTask.GetAwaiter().GetResult()))
+      Write-NativeStderrLog $FileName $argumentList $stderr
 
       return [pscustomobject]@{
         ExitCode = $process.ExitCode
-        Output = @($output)
+        Stdout = @($stdout)
+        Stderr = @($stderr)
+        Output = @($stdout)
       }
     } finally {
       $process.Dispose()
@@ -125,7 +120,7 @@ try {
           'Reply with LIAISON_SMOKE_OK only.'
         )
         $result = Invoke-Tool $config.CodexPath $arguments $temp
-        $text = $result.Output -join "`n"
+        $text = (Get-ToolCombinedLines $result) -join "`n"
         if ($result.ExitCode -ne 0 -or $text -notmatch 'LIAISON_SMOKE_OK') {
           throw "Codex smoke test failed. exit=$($result.ExitCode); output=$text"
         }
