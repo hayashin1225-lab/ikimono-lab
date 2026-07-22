@@ -72,6 +72,11 @@ function Invoke-Tool([string]$FileName, [string[]]$Arguments, [string]$WorkingDi
     if ($argumentList.Count -gt 0) { $command += ' ' + (($argumentList | ForEach-Object { Quote-ProcessArgument ([string]$_) }) -join ' ') }
     $info.FileName = $env:ComSpec
     $info.Arguments = '/d /s /c "' + $command + '"'
+  } elseif ($extension -eq '.ps1') {
+    $powerShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $scriptArguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $FileName) + $argumentList
+    $info.FileName = $powerShell
+    $info.Arguments = (($scriptArguments | ForEach-Object { Quote-ProcessArgument ([string]$_) }) -join ' ')
   } else {
     $info.FileName = $FileName
     $info.Arguments = (($argumentList | ForEach-Object { Quote-ProcessArgument ([string]$_) }) -join ' ')
