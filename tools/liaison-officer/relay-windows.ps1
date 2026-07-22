@@ -22,6 +22,7 @@ $previousInputEncoding = [Console]::InputEncoding
 $previousOutputEncoding = [Console]::OutputEncoding
 $previousPipelineEncoding = $OutputEncoding
 $previousImport = $env:LIAISON_OFFICER_IMPORT
+$requestedCodexSmokeTest = [bool]$RunCodexSmokeTest
 $config = $null
 $LockHandle = $null
 $script:CurrentStage = 'preflight'
@@ -33,6 +34,9 @@ try {
 
   $env:LIAISON_OFFICER_IMPORT = '1'
   . $relayPath -Mode $Mode -ConfigPath $ConfigPath
+
+  # Dot-sourcing relay.ps1 binds its own RunCodexSmokeTest parameter in this
+  # scope. Use the value captured from the Windows entrypoint before import.
 
   # Windows PowerShell 5.1 may decode native stdout using the active legacy
   # code page even when Console.OutputEncoding and $OutputEncoding are UTF-8.
@@ -108,7 +112,7 @@ try {
 
   if ($Mode -eq 'SelfTest') {
     Test-SelfTest $config
-    if ($RunCodexSmokeTest) {
+    if ($requestedCodexSmokeTest) {
       $temp = Join-Path $env:TEMP ("liaison-smoke-{0}" -f $PID)
       New-Item -ItemType Directory -Path $temp -Force | Out-Null
       try {
