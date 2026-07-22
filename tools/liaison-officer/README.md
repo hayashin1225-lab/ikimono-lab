@@ -42,24 +42,26 @@ gh label create codex-failed --repo hayashin1225-lab/ikimono-lab --color B60205
 
 ## 実行
 
+Windows PowerShell 5.1では、ネイティブCLIの標準出力・標準エラーをUTF-8として明示的に読み取り、日本語のGitHub JSONとCodex出力を保持するため、`relay-windows.ps1`を入口として使用する。`relay.ps1`は内部の実行本体であり、直接起動しない。
+
 ```powershell
 # 外部状態を変更しない環境確認
-.\relay.ps1 -Mode SelfTest
+.\relay-windows.ps1 -Mode SelfTest
 
 # Codex CLIの安全な一時ディレクトリ smoke test を追加
-.\relay.ps1 -Mode SelfTest -RunCodexSmokeTest
+.\relay-windows.ps1 -Mode SelfTest -RunCodexSmokeTest
 
 # 実行候補を表示するだけ
-.\relay.ps1 -Mode DryRun
+.\relay-windows.ps1 -Mode DryRun
 
 # 承認済みIssueを一件処理する
-.\relay.ps1 -Mode Once
+.\relay-windows.ps1 -Mode Once
 
 # タスクスケジューラ用。一回に一件だけ処理する
-.\relay.ps1 -Mode Scheduled
+.\relay-windows.ps1 -Mode Scheduled
 ```
 
-`relay.ps1`は`codex exec`を使用する。対象PCで確認した`codex exec --help`に従い、固定指示とIssueスナップショットを標準入力で渡す。危険なサンドボックス無効化や無制限権限オプションは使用しない。PowerShell 5.1では`ProcessStartInfo.ArgumentList`を使えないため、引数は一か所の安全な引用関数で組み立て、Issue本文をコマンドとして扱わない。
+実行本体は`codex exec`を使用する。対象PCで確認した`codex exec --help`に従い、固定指示とIssueスナップショットを標準入力で渡す。危険なサンドボックス無効化や無制限権限オプションは使用しない。PowerShell 5.1では`ProcessStartInfo.ArgumentList`を使えないため、引数は一か所の安全な引用関数で組み立て、Issue本文をコマンドとして扱わない。
 
 ## 成功・失敗・復旧
 
@@ -69,7 +71,7 @@ gh label create codex-failed --repo hayashin1225-lab/ikimono-lab --color B60205
 
 ## Scheduled Task
 
-`install-scheduled-task.ps1`は明示的に実行された場合だけ、現在のユーザーがログオン中に5分間隔で`relay.ps1 -Mode Scheduled`を動かすタスクを登録する。PCを強制起動せず、多重実行を禁止する。登録前に`config.local.json`、SelfTest、スクリプト、現在ユーザーでの実行可否を確認する。
+`install-scheduled-task.ps1`は明示的に実行された場合だけ、現在のユーザーがログオン中に5分間隔で`relay-windows.ps1 -Mode Scheduled`を動かすタスクを登録する。PCを強制起動せず、多重実行を禁止する。登録前に`config.local.json`、SelfTest、スクリプト、現在ユーザーでの実行可否を確認する。
 
 ```powershell
 .\install-scheduled-task.ps1
