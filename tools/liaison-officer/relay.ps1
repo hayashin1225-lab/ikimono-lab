@@ -259,10 +259,25 @@ function Invoke-CodexWorker($Config, $Issue, [string]$Branch, [string]$SnapshotP
   $stdoutPath = Join-Path $RunDirectory 'codex.stdout.log'; $stderrPath = Join-Path $RunDirectory 'codex.stderr.log'
   $args = @($Config.codexSubcommand) + @($Config.codexArguments) + @('-C',$Config.RepoPath,'-')
   $utf8 = New-Object System.Text.UTF8Encoding($false)
-  $info = New-Object System.Diagnostics.ProcessStartInfo; $info.FileName = $Config.CodexPath; $info.Arguments = (($args | ForEach-Object { Quote-ProcessArgument ([string]$_) }) -join ' '); $info.WorkingDirectory = $Config.RepoPath; $info.UseShellExecute = $false; $info.RedirectStandardInput = $true; $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true; $info.CreateNoWindow = $true; $info.StandardInputEncoding = $utf8; $info.StandardOutputEncoding = $utf8; $info.StandardErrorEncoding = $utf8
+  $info = New-Object System.Diagnostics.ProcessStartInfo
+  $info.FileName = $Config.CodexPath
+  $info.Arguments = (($args | ForEach-Object { Quote-ProcessArgument ([string]$_) }) -join ' ')
+  $info.WorkingDirectory = $Config.RepoPath
+  $info.UseShellExecute = $false
+  $info.RedirectStandardInput = $true
+  $info.RedirectStandardOutput = $true
+  $info.RedirectStandardError = $true
+  $info.CreateNoWindow = $true
+  $info.StandardOutputEncoding = $utf8
+  $info.StandardErrorEncoding = $utf8
   $process = New-Object System.Diagnostics.Process; $process.StartInfo = $info
   if (-not $process.Start()) { throw 'Codex process did not start.' }
-  $process.StandardInput.Write($prompt); $process.StandardInput.Close(); $outTask = $process.StandardOutput.ReadToEndAsync(); $errTask = $process.StandardError.ReadToEndAsync()
+  $inputBytes = $utf8.GetBytes($prompt)
+  $process.StandardInput.BaseStream.Write($inputBytes, 0, $inputBytes.Length)
+  $process.StandardInput.BaseStream.Flush()
+  $process.StandardInput.Close()
+  $outTask = $process.StandardOutput.ReadToEndAsync()
+  $errTask = $process.StandardError.ReadToEndAsync()
   Start-Sleep -Milliseconds 50
   $treeIds = @(Get-ProcessTreeIds $process.Id)
   $timeoutMilliseconds = [int]([double]$Config.timeoutMinutes * 60000)
