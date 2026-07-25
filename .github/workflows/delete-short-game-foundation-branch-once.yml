@@ -1,5 +1,6 @@
 name: Delete merged short-game branch once
 
+# One-time trigger after the workflow exists on main.
 on:
   push:
     branches:
