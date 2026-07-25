@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>自然史遊戯録・短編共通基盤</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <button class="brand-button" type="button" data-go="hub" data-requires-storage aria-label="調査拠点へ戻る">
+        <span class="brand-mark" aria-hidden="true">◇</span>
+        <span id="header-title">自然史遊戯録</span>
+      </button>
+      <button class="quiet-button" id="open-settings" type="button" data-requires-storage>設定・記録</button>
+    </header>
+
+    <main id="app-main" tabindex="-1">
+      <section class="screen is-active" data-screen="title" aria-labelledby="title-heading">
+        <div class="hero-card">
+          <p class="eyebrow">NATURAL HISTORY GAME TEMPLATE</p>
+          <h1 id="title-heading">自然史遊戯録・短編共通基盤</h1>
+          <p class="lead" id="title-subtitle">作品データを読み込んでいます。</p>
+          <button class="primary-button" id="start-game" type="button" data-requires-storage>調査を始める</button>
+        </div>
+
+        <aside class="recovery-card" id="recovery-card" hidden aria-labelledby="recovery-heading">
+          <p class="eyebrow">SAVE DATA RECOVERY</p>
+          <h2 id="recovery-heading">保存データを安全に復旧してください</h2>
+          <p id="recovery-reason"></p>
+          <div class="button-row">
+            <button class="secondary-button" id="download-broken-save" type="button">破損データを退避</button>
+            <button class="danger-button" id="reset-save" type="button">初期状態で再開</button>
+            <button class="quiet-button" id="continue-without-save" type="button">保存せず確認する</button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="screen" data-screen="hub" aria-labelledby="hub-heading" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">BASE</p>
+          <h1 id="hub-heading">調査拠点</h1>
+          <p id="hub-description"></p>
+        </div>
+        <div class="dashboard-grid">
+          <article class="metric-card">
+            <span>行動回数</span>
+            <strong id="action-count">0</strong>
+          </article>
+          <article class="metric-card">
+            <span>標本種類</span>
+            <strong id="collection-count">0</strong>
+          </article>
+        </div>
+        <div class="action-grid">
+          <button class="primary-button" id="open-condition" type="button">行動条件を選ぶ</button>
+          <button class="secondary-button" type="button" data-go="collection">図鑑を見る</button>
+          <button class="secondary-button" id="open-ending" type="button" disabled>エンディング</button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="condition" aria-labelledby="condition-heading" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">CONDITION</p>
+          <h1 id="condition-heading">行動条件</h1>
+          <p>一つ選んで調査を確定します。</p>
+        </div>
+        <form id="condition-form">
+          <fieldset>
+            <legend class="visually-hidden">調査条件を選択</legend>
+            <div class="choice-list" id="condition-list"></div>
+          </fieldset>
+          <div class="button-row">
+            <button class="primary-button" type="submit">この条件で調査する</button>
+            <button class="quiet-button" type="button" data-go="hub">戻る</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="screen" data-screen="result" aria-labelledby="result-heading" hidden>
+        <div class="result-card">
+          <p class="eyebrow">RESULT</p>
+          <h1 id="result-heading">調査結果</h1>
+          <div class="specimen-symbol" aria-hidden="true">◇</div>
+          <h2 id="result-name">標本名</h2>
+          <p id="result-summary"></p>
+          <p class="count-note" id="result-count"></p>
+        </div>
+        <div class="button-row">
+          <button class="primary-button" type="button" data-go="condition">もう一度調査する</button>
+          <button class="secondary-button" type="button" data-go="collection">図鑑で確認</button>
+          <button class="quiet-button" type="button" data-go="hub">拠点へ戻る</button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="collection" aria-labelledby="collection-heading" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">COLLECTION</p>
+          <h1 id="collection-heading">図鑑</h1>
+          <p>発見した標本の記録です。</p>
+        </div>
+        <div class="collection-grid" id="collection-list"></div>
+        <div class="button-row">
+          <button class="primary-button" type="button" data-go="condition">調査を続ける</button>
+          <button class="quiet-button" type="button" data-go="hub">拠点へ戻る</button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="ending" aria-labelledby="ending-heading" hidden>
+        <div class="ending-card">
+          <p class="eyebrow">ENDING</p>
+          <h1 id="ending-heading">調査記録がまとまりました</h1>
+          <p id="ending-body"></p>
+          <button class="primary-button" type="button" data-go="hub">調査拠点へ</button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="settings-record" aria-labelledby="settings-heading" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">SETTINGS &amp; RECORD</p>
+          <h1 id="settings-heading">設定・記録</h1>
+          <p>端末設定と、持ち運び用の記録JSONを管理します。</p>
+        </div>
+
+        <div class="settings-grid">
+          <section class="panel" aria-labelledby="sound-heading">
+            <h2 id="sound-heading">表示・音量</h2>
+            <label class="field-label" for="volume">音量 <output id="volume-output">70%</output></label>
+            <input id="volume" type="range" min="0" max="1" step="0.1" value="0.7">
+            <label class="check-label">
+              <input id="reduced-motion" type="checkbox">
+              動きを抑える
+            </label>
+          </section>
+
+          <section class="panel" aria-labelledby="record-heading">
+            <h2 id="record-heading">記録JSON</h2>
+            <p>同じ記録を繰り返し読み込んでも、重複追加や進捗後退は起こりません。</p>
+            <div class="button-row">
+              <button class="secondary-button" id="export-record" type="button">記録を書き出す</button>
+              <label class="file-button" for="import-record">記録を読み込む</label>
+              <input class="visually-hidden" id="import-record" type="file" accept="application/json,.json">
+            </div>
+          </section>
+        </div>
+
+        <div class="button-row">
+          <button class="primary-button" type="button" data-go="hub">拠点へ戻る</button>
+          <button class="danger-button" id="request-reset" type="button">保存を初期化</button>
+        </div>
+      </section>
+    </main>
+
+    <div class="status-toast" id="status-message" role="status" aria-live="polite" hidden></div>
+  </div>
+
+  <script src="assets/js/core.js"></script>
+  <script src="data/game-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
