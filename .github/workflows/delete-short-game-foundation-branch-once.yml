@@ -1,6 +1,5 @@
-name: Delete merged short-game branch once
+name: Delete temporary cleanup branch once
 
-# One-time trigger after the workflow exists on main.
 on:
   push:
     branches:
@@ -13,15 +12,15 @@ permissions:
 
 jobs:
   delete-branch:
-    if: contains(github.event.head_commit.message, '[delete short-game branch]')
+    if: contains(github.event.head_commit.message, '[delete cleanup branch]')
     runs-on: ubuntu-latest
     steps:
-      - name: Delete merged branch and verify
+      - name: Delete temporary cleanup branch and verify
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            const branch = 'agent/issue-24-short-game-foundation';
+            const branch = 'ops/delete-short-game-branch-20260725';
 
             try {
               await github.rest.git.deleteRef({
